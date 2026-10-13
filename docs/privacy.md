@@ -29,7 +29,7 @@ Responses:
 - `200 {request_id, found, dry_run, deleted: {table: rows}, retained: [{type, count, reason}]}`. Once someone is erased, later calls answer `found: false`.
 - `401 {error}` for a bad token, `400 action_mismatch`, `409 replayed`
 - `409 manual_review_required` for staff accounts (any granted role) and people selling items in the shop, since other people depend on what they own. Staff handle those by hand.
-- `503 jwks_unavailable` when the JWKS can't be fetched, and `503 dependency_unavailable` when file storage, search, Gorse or the Ahoy database fails during a real run. The hub retries both.
+- `503 jwks_unavailable` when the JWKS can't be fetched, and `503 dependency_unavailable` when file storage, search, Gorse or the Ahoy database fails during a real run. The hub retries both. A dependency failure releases the token's replay record after the erasure transaction rolls back, so the same unexpired token can be retried.
 
 ## Who is matched
 
@@ -66,7 +66,7 @@ A real run records a `privacy_erasure` PaperTrail version on the placeholder acc
   - files in storage (Cloudflare R2 in production) for every deleted attachment, with their variants and previews
   - Ahoy visits and events, when the Ahoy database is configured. They're counted on a dry run.
   - their user, project, devlog and ship documents in the semantic search index, and its result cache
-  - their user, project and post records in Gorse
+  - their user, project and post records in Gorse, when Gorse is enabled by configuration and the feature flag
   - cached balance and Hackatime API key entries
 
 ### Projects

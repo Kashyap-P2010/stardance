@@ -3,6 +3,7 @@ module Api
   class PrivacyController < ActionController::API
     before_action :authenticate!
     rescue_from Privacy::Eraser::DependencyUnavailable do
+      PrivacyTokenUse.where(jti: @claims.jti).delete_all
       log("dependency_unavailable")
       render_error("dependency_unavailable", :service_unavailable)
     end

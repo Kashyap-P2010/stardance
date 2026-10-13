@@ -130,6 +130,26 @@ class Privacy::EraserTest < ActiveSupport::TestCase
     assert eraser(slack_id: "U_ERASE_ME").manual_review_required?
   end
 
+  [ :configuration, :feature_flag ].each do |disabled_by|
+    test "skips configured Gorse when disabled by #{disabled_by}" do
+      config = ActiveSupport::OrderedOptions.new
+      config.endpoint = "https://gorse.example.test"
+      config.enabled = disabled_by != :configuration
+      Flipper.enable(:gorse_recommendations) if disabled_by == :configuration
+      Flipper.disable(:gorse_recommendations) if disabled_by == :feature_flag
+
+      Gorse.stub(:config, -> { config }) do
+        Gorse::Client.stub(:new, ->(*) { flunk "Disabled Gorse must not be contacted" }) do
+          result = eraser(slack_id: "U_ERASE_ME").call(dry_run: false, request_id: "req-disabled-gorse")
+
+          assert result.found
+          assert_nil @user.reload.slack_id
+          assert_empty @user.identities
+        end
+      end
+    end
+  end
+
   private
 
   def eraser(emails: [], slack_id: nil, identity_id: nil)

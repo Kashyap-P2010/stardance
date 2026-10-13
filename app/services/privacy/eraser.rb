@@ -346,7 +346,7 @@ module Privacy
         SemanticSearch.redis.del(*documents.flat_map { |type, ids| ids.map { |id| SemanticSearch::Document.redis_key_for(type, id) } })
         SemanticSearch.clear_result_cache
       end
-      if Gorse.config.endpoint.present?
+      if Gorse.enabled?
         gorse = Gorse::Client.new
         user_ids.each { |id| gorse.delete_user!("user:#{id}") }
         sole_project_ids.each { |id| gorse.delete_item!("project:#{id}") }

@@ -85,6 +85,41 @@ class Api::PrivacyControllerTest < ActionDispatch::IntegrationTest
     assert @user.identities.exists?
   end
 
+  test "a dependency failure allows the same token to retry and success prevents replay" do
+    jti = SecureRandom.uuid
+    token = privacy_token(jti:, dry_run: false, subject: { slack_id: "U_PRIVACY" })
+    client = Gorse::Client.new
+
+    Gorse.stub(:enabled?, true) do
+      Gorse::Client.stub(:new, client) do
+        client.stub(:delete_user!, ->(*) { raise Faraday::ConnectionFailed, "unavailable" }) do
+          call(api_privacy_delete_path, token)
+        end
+
+        assert_response :service_unavailable
+        assert_equal({ "error" => "dependency_unavailable" }, response.parsed_body)
+        assert_not PrivacyTokenUse.exists?(jti:)
+        assert_equal "U_PRIVACY", @user.reload.slack_id
+        assert @user.identities.exists?
+
+        deleted_users = []
+        client.stub(:delete_user!, ->(id) { deleted_users << id }) do
+          call(api_privacy_delete_path, token)
+        end
+
+        assert_response :success
+        assert_equal [ "user:#{@user.id}" ], deleted_users
+        assert_nil @user.reload.slack_id
+        assert_empty @user.identities
+        assert PrivacyTokenUse.exists?(jti:)
+
+        call(api_privacy_delete_path, token)
+        assert_response :conflict
+        assert_equal({ "error" => "replayed" }, response.parsed_body)
+      end
+    end
+  end
+
   test "refuses staff accounts for a human to handle" do
     @user.grant_role!(:admin)
 
