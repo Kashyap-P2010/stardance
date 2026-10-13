@@ -483,6 +483,9 @@ Rails.application.routes.draw do
     namespace :slack do
       post "events", to: "events#create"
     end
+
+    post "privacy/delete", to: "privacy#delete"
+    post "privacy/export", to: "privacy#export"
   end
 
   get "api/v1/docs", to: "api/v1/docs#index", as: :api_v1_docs
