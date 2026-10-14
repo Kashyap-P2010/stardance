@@ -89,6 +89,52 @@ class Projects::DevlogsControllerTest < ActionDispatch::IntegrationTest
     assert Post::Devlog.unscoped.find(devlog.id).deleted?
   end
 
+  test "the edit page offers an add slot until the devlog is at the attachment limit" do
+    devlog = create_devlog
+    sign_in @owner
+
+    get edit_project_devlog_path(@project, devlog)
+    assert_select ".devlog-edit__attachment-grid > .devlog-edit__attachment", 2
+    assert_select ".devlog-edit__attachment-grid .devlog-edit__attachment-replace-label", text: "Add a screenshot or video", count: 1
+
+    devlog.attachments.attach(Array.new(Post::Devlog::MAX_ATTACHMENTS - 1) { png_upload })
+
+    get edit_project_devlog_path(@project, devlog)
+    assert_select ".devlog-edit__attachment-grid > .devlog-edit__attachment", Post::Devlog::MAX_ATTACHMENTS
+    assert_select ".devlog-edit__attachment-grid .devlog-edit__attachment-replace-label", text: "Add a screenshot or video", count: 0
+  end
+
+  test "adding an attachment while editing keeps the existing one" do
+    devlog = create_devlog
+    original = devlog.attachments.first
+    sign_in @owner
+
+    patch project_devlog_path(@project, devlog), params: {
+      post_devlog: { body: devlog.body, attachments: [ png_upload ] }
+    }
+
+    assert_redirected_to project_path(@project)
+    attachment_ids = devlog.reload.attachments.map(&:id)
+    assert_equal 2, attachment_ids.size
+    assert_includes attachment_ids, original.id
+  end
+
+  test "adding attachments past the limit is rejected without losing any" do
+    devlog = create_devlog
+    original = devlog.attachments.first
+    sign_in @owner
+
+    patch project_devlog_path(@project, devlog), params: {
+      post_devlog: { body: "Edited body.", attachments: Array.new(Post::Devlog::MAX_ATTACHMENTS) { png_upload } }
+    }
+
+    assert_response :unprocessable_entity
+    assert_match "can't have more than #{Post::Devlog::MAX_ATTACHMENTS} attachments", flash[:alert]
+    devlog.reload
+    assert_equal [ original.id ], devlog.attachments.map(&:id)
+    assert_equal "Built the thing.", devlog.body
+  end
+
   private
 
   def create_devlog
