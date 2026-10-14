@@ -79,6 +79,19 @@ class SearchUsersTest < ActionDispatch::IntegrationTest
     assert_equal [ banned.id ], json_body.map { |u| u["id"] }
   end
 
+  # Fraud and fulfillment staff can read the audit log too, so the filter has
+  # to name banned actors for them as well.
+  test "fraud dept can find a banned user" do
+    fraud = create_user("fraud", role: :fraud_dept)
+    banned = create_user("bannedfraud")
+    banned.update!(banned: true)
+    sign_in fraud
+
+    get search_users_path(format: :json), params: { id: banned.id }
+
+    assert_equal [ banned.id ], json_body.map { |u| u["id"] }
+  end
+
   test "non-admins still find an ordinary user by id" do
     target = create_user("visible")
     sign_in @member
