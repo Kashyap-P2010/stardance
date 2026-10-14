@@ -4,7 +4,7 @@ class FraudDailySummaryJob < ApplicationJob
   FRAUD_CHANNEL_ID = "C0B239CM64W"
 
   include Rails.application.routes.url_helpers
-  include ActionView::Helpers::DateHelper
+  include TimeFormattingHelper
 
   def perform
     return unless Flipper.enabled?(:fraud_daily_summary)
@@ -110,7 +110,7 @@ class FraudDailySummaryJob < ApplicationJob
 
       *Long Hang Time (>48h)*
       • Pending >48h: *#{orders[:long_pending_count]}*
-      #{orders[:oldest_pending]&.created_at ? "• Oldest: *#{time_ago_in_words(orders[:oldest_pending].created_at)}* ago" : ""}
+      #{orders[:oldest_pending]&.created_at ? "• Oldest: *#{duration_in_words(Time.current - orders[:oldest_pending].created_at)}* ago" : ""}
 
       *Today's Reviewers*
       #{format_leaderboard(orders[:leaderboard])}
@@ -141,5 +141,4 @@ class FraudDailySummaryJob < ApplicationJob
       "*#{backlog}* orders waiting."
     end
   end
-
 end

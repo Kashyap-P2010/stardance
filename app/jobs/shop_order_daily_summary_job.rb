@@ -1,7 +1,7 @@
 class ShopOrderDailySummaryJob < ApplicationJob
   queue_as :literally_whenever
 
-  include ActionView::Helpers::DateHelper
+  include TimeFormattingHelper
 
   SHOP_ORDER_CHANNEL_ID = "C09N1P69GKZ"
 
@@ -62,7 +62,7 @@ class ShopOrderDailySummaryJob < ApplicationJob
 
       *⏰ Long Hang Time (>48h)*
       • Awaiting >48h: *#{long_awaiting.count}*
-      #{oldest_awaiting&.awaiting_periodical_fulfillment_at ? "• Oldest: *#{time_ago_in_words(oldest_awaiting.awaiting_periodical_fulfillment_at)}* ago" : ""}
+      #{oldest_awaiting&.awaiting_periodical_fulfillment_at ? "• Oldest: *#{duration_in_words(Time.current - oldest_awaiting.awaiting_periodical_fulfillment_at)}* ago" : ""}
 
       *👤 Assigned to Users*
       #{format_assigned_breakdown(assigned_breakdown, user_names)}
@@ -148,5 +148,4 @@ class ShopOrderDailySummaryJob < ApplicationJob
       "📊 *#{backlog}* orders waiting. Let's chip away at it! 💪"
     end
   end
-
 end
