@@ -103,7 +103,7 @@
       </div>
     <% elsif versions.count > limit %>
       <div class="audit-log__footer">
-        <%= link_to "View all #{versions.count} changes →", admin_audit_logs_path(item_type: item_type, item_id: record.id), class: "audit-log__view-all" %>
+        <%= link_to "View all #{versions.count} changes →", admin_audit_logs_path(item_type: item_type, item_id: record.id, show_system: "1"), class: "audit-log__view-all" %>
       </div>
     <% end %>
   <% else %>
