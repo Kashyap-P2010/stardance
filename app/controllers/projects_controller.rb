@@ -129,8 +129,7 @@ class ProjectsController < ApplicationController
 
     @queue_mismatch_review = visible_queue_mismatch
 
-    # Shipwright verdicts are rendered straight from the review records —
-    # they're private to project members, so they never become Post rows.
+    # Review visibility is checked separately from public Post rows.
     @timeline_entries = Project.sort_timeline_entries(
       @posts + visible_ship_decisions + visible_funding_requests
     )
@@ -215,33 +214,26 @@ class ProjectsController < ApplicationController
   end
   private :prepare_project_show_context
 
-  # Who can see a project's hardware review history (funding requests + ship
-  # verdicts) on its page:
-  #   - reviewers always can - they need the history to do their job;
-  #   - the project's own members and admins can while the surface's rollout flag
-  #     is on for them (the amount asked for and the reviewer's feedback are
-  #     otherwise the team's business);
-  #   - and when the +public_hardware_reviews+ flag is on, anyone viewing the
-  #     project can - logged in or not.
-  def hardware_review_history_visible?(rollout_flag)
-    return true if Flipper.enabled?(:public_hardware_reviews)
+  # Ordinary hardware verdicts are public. Software feedback stays with the
+  # project team, reviewers, admins and helpers.
+  def ship_review_history_visible?
+    return true if @project.hardware?
     return false unless current_user
-    return true if current_user.can_review?
-    return false unless Flipper.enabled?(rollout_flag, current_user)
+    return true if current_user.can_review? || current_user.helper?
+    return false unless Flipper.enabled?(:week_1_release, current_user)
 
-    @is_member || current_user.admin?
+    @is_member
   end
-  private :hardware_review_history_visible?
+  private :ship_review_history_visible?
 
-  # Decided Shipwright reviews. Same audience as the funding history below.
+  # Permanent rejections never inherit ordinary review visibility.
   def visible_ship_decisions
-    return [] unless hardware_review_history_visible?(:week_1_release)
-
+    history_visible = ship_review_history_visible?
     @project.ship_reviews
             .decided
-            .includes(:reviewer)
+            .includes(:reviewer, post_ship_event: :post)
             .with_attached_verdict_video
-            .to_a
+            .select { |review| review.permanently_rejected? ? permanent_rejection_visible?(review) : history_visible }
   end
   private :visible_ship_decisions
 
@@ -249,14 +241,23 @@ class ProjectsController < ApplicationController
   # Project#timeline_funding_requests), so a returned review keeps its place as
   # newer devlogs are posted rather than only the latest request showing.
   def visible_funding_requests
-    return [] unless hardware_review_history_visible?(:hardware_flow)
-
-    @project.timeline_funding_requests.includes(:reviewer).to_a
+    @project.timeline_funding_requests.includes(:reviewer, :user).select do |review|
+      !review.permanently_rejected? || permanent_rejection_visible?(review)
+    end
   end
   private :visible_funding_requests
 
-  # The "your submission is in the wrong queue" question, if one is open. Same
-  # audience as the funding requests above: members and admins only.
+  # Permanent decisions are only for project owners, helpers and review staff.
+  def permanent_rejection_visible?(review)
+    return false unless current_user
+    return true if @is_owner || current_user.can_review? || current_user.helper?
+
+    policy([ :admin, review ]).show?
+  end
+  private :permanent_rejection_visible?
+
+  # The "your submission is in the wrong queue" question, if one is open.
+  # Members and admins only.
   def visible_queue_mismatch
     return nil unless current_user
     return nil unless @is_member || current_user.admin?
@@ -329,16 +330,18 @@ class ProjectsController < ApplicationController
     validate_urls
     success = false
 
-    Project.transaction do
-      break unless @project.errors.empty? && @project.save
+    PaperTrail.request(whodunnit: paper_trail_whodunnit) do
+      Project.transaction do
+        break unless @project.errors.empty? && @project.save
 
-      @project.memberships.create!(user: current_user, role: :owner)
-      link_hackatime_projects
+        @project.memberships.create!(user: current_user, role: :owner)
+        link_hackatime_projects
 
-      if @project.errors.empty?
-        success = true
-      else
-        raise ActiveRecord::Rollback
+        if @project.errors.empty?
+          success = true
+        else
+          raise ActiveRecord::Rollback
+        end
       end
     end
 
@@ -385,10 +388,9 @@ class ProjectsController < ApplicationController
   def update
     authorize @project
 
-    whodunnit = impersonating? ? real_user&.id : current_user&.id
     success = nil
 
-    PaperTrail.request(whodunnit: whodunnit) do
+    PaperTrail.request(whodunnit: paper_trail_whodunnit) do
       @project.assign_attributes(project_params)
       validate_urls
       success = @project.errors.empty? && @project.save
@@ -451,7 +453,7 @@ class ProjectsController < ApplicationController
         )
       end
 
-      @project.soft_delete!(force: force)
+      PaperTrail.request(whodunnit: paper_trail_whodunnit) { @project.soft_delete!(force: force) }
       flash[:notice] = "Project deleted successfully"
       redirect_to profile_projects_path(current_user.display_name)
     rescue ActiveRecord::RecordInvalid => e
@@ -556,9 +558,12 @@ class ProjectsController < ApplicationController
   # validation error instead of a bare 400.
   def project_params
     params.fetch(:project, ActionController::Parameters.new)
-          .permit(:title, :description, :demo_url, :repo_url, :readme_url, :banner, :ai_declaration, :update_description, :hardware_stage, hackatime_project_ids: [])
+          .permit(:title, :description, :demo_url, :repo_url, :readme_url, :banner, :ai_declaration, :update_description, :hardware_stage)
   end
 
+  # Read here rather than permitted into project_params: the association's ids
+  # writer unlinks with update_all, skipping the key's validations and audit
+  # trail, so links only ever change through link_hackatime_projects.
   def hackatime_project_ids
     @hackatime_project_ids ||= Array(params.dig(:project, :hackatime_project_ids)).reject(&:blank?).map(&:to_i)
   end
@@ -653,6 +658,10 @@ class ProjectsController < ApplicationController
     Rails.logger.warn("URL validation error for #{attribute}: #{e.class}: #{e.message}")
     @project.errors.add(attribute, "#{name} could not be verified. Please try again or contact support if the issue persists.")
   end
+
+  # An impersonated change is recorded against the admin doing the impersonating.
+  def paper_trail_whodunnit = impersonating? ? real_user&.id : current_user&.id
+
   def link_hackatime_projects
     # Unlink hackatime projects that were removed. Scoped to the current user:
     # every member of a hardware project has their own row under the same name,

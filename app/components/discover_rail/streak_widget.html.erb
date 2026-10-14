@@ -23,6 +23,14 @@
         </span>
       <% end %>
     </div>
+    <% if ready? %>
+      <%= link_to helpers.streak_home_discover_rail_path(refresh: 1),
+            class: "streak-widget__refresh",
+            title: "Refresh from Hackatime",
+            aria: { label: "Refresh streak from Hackatime" } do %>
+        <%= helpers.inline_svg_tag "icons/refresh.svg", class: "streak-widget__refresh-icon" %>
+      <% end %>
+    <% end %>
   </div>
 
   <% if setup_needed? %>
@@ -67,7 +75,7 @@
       </div>
 
       <% if sticky_started? %>
-        <%= render "sticky_streaks/claim", sticky_streak: sticky_streak %>
+        <%= render "sticky_streaks/claim", runs: claimable_runs, current_run: sticky_streak %>
       <% end %>
     </div>
 
@@ -91,8 +99,8 @@
       <% end %>
     </div>
 
-    <% if !sticky_started? && sticky_streaks_enabled? %>
-      <%= render "sticky_streaks/start" %>
+    <% if startable_sticky_kind %>
+      <%= render "sticky_streaks/start", kind: startable_sticky_kind, forfeiting: sticky_forfeit_count %>
     <% end %>
 
     <button type="button" class="streak-widget__toggle" data-action="streak#toggleCalendar" data-streak-target="toggleBtn">

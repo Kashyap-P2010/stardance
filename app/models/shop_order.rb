@@ -5,6 +5,7 @@
 #  id                                 :bigint           not null, primary key
 #  aasm_state                         :string
 #  awaiting_periodical_fulfillment_at :datetime
+#  country                            :string(2)
 #  external_ref                       :string
 #  frozen_address_ciphertext          :text
 #  frozen_item_price                  :decimal(6, 2)
@@ -26,6 +27,7 @@
 #  assigned_to_user_id                :bigint
 #  fraud_payout_line_id               :bigint
 #  fraud_related_project_id           :bigint
+#  fraud_review_payout_id             :bigint
 #  fulfillment_payout_line_id         :bigint
 #  parent_order_id                    :bigint
 #  shop_card_grant_id                 :bigint
@@ -41,6 +43,8 @@
 #  idx_shop_orders_user_item_state                  (user_id,shop_item_id,aasm_state)
 #  idx_shop_orders_user_item_unique                 (user_id,shop_item_id)
 #  index_shop_orders_on_assigned_to_user_id         (assigned_to_user_id)
+#  index_shop_orders_on_country                     (country)
+#  index_shop_orders_on_fraud_review_payout_id      (fraud_review_payout_id)
 #  index_shop_orders_on_fulfillment_payout_line_id  (fulfillment_payout_line_id)
 #  index_shop_orders_on_parent_order_id             (parent_order_id)
 #  index_shop_orders_on_region                      (region)
@@ -52,6 +56,7 @@
 # Foreign Keys
 #
 #  fk_rails_...  (assigned_to_user_id => users.id) ON DELETE => nullify
+#  fk_rails_...  (fraud_review_payout_id => fraud_review_payouts.id)
 #  fk_rails_...  (fulfillment_payout_line_id => fulfillment_payout_lines.id)
 #  fk_rails_...  (parent_order_id => shop_orders.id)
 #  fk_rails_...  (shop_item_id => shop_items.id)
@@ -77,8 +82,11 @@ class ShopOrder < ApplicationRecord
   has_one :mission_submission, class_name: "Mission::Submission", inverse_of: :shop_order
   belongs_to :warehouse_package, class_name: "ShopWarehousePackage", optional: true
   belongs_to :assigned_to_user, class_name: "User", optional: true
+  belongs_to :fraud_review_payout, optional: true, inverse_of: :shop_orders
   belongs_to :fulfillment_payout_line, optional: true
-  belongs_to :fraud_related_project, class_name: "Project", optional: true, foreign_key: :fraud_related_project_id, inverse_of: false
+  # Banned users' projects are usually soft-deleted by the time their orders are
+  # rejected, so a deleted project is still a valid thing to point at.
+  belongs_to :fraud_related_project, -> { with_deleted }, class_name: "Project", optional: true, foreign_key: :fraud_related_project_id, inverse_of: false
 
   # has_many :payouts, as: :payable, dependent: :destroy
 
@@ -118,20 +126,42 @@ class ShopOrder < ApplicationRecord
       redeeming_sticky_streak.present?
   end
 
+  # A ban rejects every order the user has open at once, so there is no single
+  # project behind it the way there is for a reviewer's rejection.
+  attr_accessor :system_rejection
+
   validates :internal_rejection_reason, presence: true, if: :rejected?
-  validates :fraud_related_project_id, presence: true, if: :rejected?
+  validates :fraud_related_project_id, presence: true, if: -> { rejected? && !system_rejection }
   validate :fraud_related_project_exists, if: -> { fraud_related_project_id.present? }
 
   after_create :create_negative_payout
   after_create :assign_default_user
   after_create :notify_amber_if_verification_call_required
   after_create :hold_if_usps_suspended
-  before_create :freeze_item_price
-  before_create :set_region_from_address
+  # All three run before_validation (not before_create) so frozen_item_price
+  # and region are populated in time for check_user_balance /
+  # check_regional_availability to actually validate against them, instead of
+  # running before either is set.
+  before_validation :set_region_from_address, on: :create
+  before_validation :set_country_from_address, on: :create
+  before_validation :freeze_item_price, on: :create
   after_commit :notify_user_of_status_change, if: :saved_change_to_aasm_state?
+  after_commit :schedule_hold_release, if: :placed_on_hold?
 
+  HOLD_DURATION = 7.days
+
+  scope :expired_holds, ->(now = Time.current) {
+    cutoff = now - HOLD_DURATION
+    where(aasm_state: "on_hold")
+      .where("on_hold_at <= :cutoff OR (on_hold_at IS NULL AND updated_at <= :cutoff)", cutoff: cutoff)
+  }
   scope :worth_counting, -> { where.not(aasm_state: %w[rejected refunded]) }
   scope :real, -> { without_item_type("ShopItem::FreeStickers") }
+  # Sticky Streak stickers clear review on their own and ship outside the batch
+  # sweep, and one 21-day run adds 21 of them per person, so counting them
+  # alongside the orders a human actually works buries that work. They still
+  # show up in the queues themselves; they just leave the numbers alone.
+  scope :without_streak_stickers, -> { without_item_type("ShopItem::StickyStreakSticker") }
   scope :manually_fulfilled, -> { joins(:shop_item).merge(ShopItem.where(type: ShopItem::MANUAL_FULFILLMENT_TYPES)) }
   scope :with_item_type, ->(item_type) { joins(:shop_item).where(shop_items: { type: item_type.to_s }) }
   scope :without_item_type, ->(item_type) { joins(:shop_item).where.not(shop_items: { type: item_type.to_s }) }
@@ -276,6 +306,17 @@ class ShopOrder < ApplicationRecord
     end
   end
 
+  def hold_expires_at
+    return unless on_hold?
+
+    (on_hold_at || updated_at) + HOLD_DURATION
+  end
+
+  def hold_expired?(now = Time.current)
+    expiration = hold_expires_at
+    expiration.present? && expiration <= now
+  end
+
   def digital?
     DIGITAL_ITEM_TYPES.include?(shop_item.type)
   end
@@ -315,8 +356,51 @@ class ShopOrder < ApplicationRecord
       total_cost_with_modifiers > HIGH_VALUE_THRESHOLD
   end
 
-  def requires_additional_review?
-    high_value? && reviews.count < 2
+  def review_count(verdict)
+    reviews.count { |review| review.verdict == verdict }
+  end
+
+  # Verdicts are counted apart: two approvals do not clear a rejection, and a
+  # split decision clears neither, so a third reviewer breaks the tie.
+  def requires_additional_review?(verdict = ShopOrderReview::APPROVE)
+    high_value? && review_count(verdict) < ShopOrderReview::REQUIRED_COUNT
+  end
+
+  # Neither verdict has carried, so the order cannot move until someone else
+  # weighs in. The mirror of ShopOrderReview.awaiting_another_reviewer.
+  def awaiting_another_review?
+    requires_additional_review?(ShopOrderReview::APPROVE) && requires_additional_review?(ShopOrderReview::REJECT)
+  end
+
+  # One reviewer's verdict on a high-value order, with the audit entry the
+  # order page and the fraud dashboard read back. Returns the review, carrying
+  # its errors when it could not be recorded.
+  def record_review(user:, verdict:, reason:)
+    with_lock do
+      previous_count = reviews.count
+      review = reviews.build(user: user, verdict: verdict, reason: reason)
+
+      if review.save
+        ::PaperTrail::Version.create!(
+          item_type: "ShopOrder",
+          item_id: id,
+          event: "review",
+          whodunnit: user.id,
+          object_changes: {
+            review_count: [ previous_count, previous_count + 1 ],
+            verdict: review.verdict,
+            reason: review.reason
+          }
+        )
+        reviews.reset
+      end
+
+      review
+    end
+  end
+
+  def fraud_review_state?
+    aasm_state.in?(FRAUD_REVIEW_STATES)
   end
 
   def approvable?
@@ -326,6 +410,16 @@ class ShopOrder < ApplicationRecord
   # States that still need a fraud/shop-manager verdict, mirroring the
   # Certification::Ship review queue for the fraud dashboard overview.
   REVIEW_QUEUE_STATES = %w[pending awaiting_verification awaiting_verification_call on_hold].freeze
+
+  # The states the fraud queue can actually act on. Narrower than
+  # REVIEW_QUEUE_STATES on purpose: an awaiting_verification order is waiting on
+  # the buyer, not on a reviewer, so it would sit at the top of an age-sorted
+  # queue that nobody can clear.
+  FRAUD_REVIEW_STATES = %w[pending on_hold].freeze
+
+  # Every state mark_rejected can leave. Banning a user has to clear all of
+  # them, not just the two an order passes through on the way to fulfillment.
+  REJECTABLE_STATES = %w[pending awaiting_verification awaiting_verification_call awaiting_periodical_fulfillment on_hold].freeze
 
   # Health target for the review queue, same shape as Certification::Ship::QUEUE_TARGET.
   QUEUE_TARGET = 25
@@ -426,6 +520,15 @@ class ShopOrder < ApplicationRecord
 
   private
 
+  def placed_on_hold?
+    saved_change_to_aasm_state? && on_hold?
+  end
+
+  def schedule_hold_release
+    expiration = hold_expires_at
+    Shop::ReleaseExpiredOrderHoldsJob.set(wait_until: expiration).perform_later(expiration)
+  end
+
   def freeze_item_price
     return unless shop_item
     return if frozen_item_price.present?
@@ -440,9 +543,9 @@ class ShopOrder < ApplicationRecord
     end
 
     # Use price_for_user so any per-user pricing is enforced at purchase, not
-    # just displayed. Falls back to the regional price for ordinary items.
-    order_region = region.presence || Shop::Regionalizable.country_to_region(frozen_address&.dig("country"))
-    self.frozen_item_price = shop_item.price_for_user(user, order_region || "XX")
+    # just displayed. region is set by set_region_from_address, which runs
+    # first, so this is always the region the order actually ships to.
+    self.frozen_item_price = shop_item.price_for_user(user, region.presence || "XX")
   end
 
   def check_item_enabled
@@ -477,7 +580,10 @@ class ShopOrder < ApplicationRecord
     return if redeeming_prize?
     return unless frozen_item_price&.positive? && quantity.present?
 
-    total_cost_for_validation = frozen_item_price * quantity
+    # total_cost_with_modifiers, not just the item price: it's what
+    # create_negative_payout actually deducts, so the balance check has to
+    # match or a modifier-priced order can still push the ledger negative.
+    total_cost_for_validation = total_cost_with_modifiers
     if user&.balance&.< total_cost_for_validation
       shortage = total_cost_for_validation - (user.balance || 0)
       errors.add(:base, "Insufficient balance. You need #{shortage} more tickets.")
@@ -611,7 +717,7 @@ class ShopOrder < ApplicationRecord
   end
 
   def fraud_related_project_exists
-    unless Project.exists?(fraud_related_project_id)
+    unless Project.with_deleted.exists?(fraud_related_project_id)
       errors.add(:fraud_related_project_id, "project ##{fraud_related_project_id} does not exist")
     end
   end
@@ -621,6 +727,13 @@ class ShopOrder < ApplicationRecord
     return unless frozen_address.present? && frozen_address["country"].present?
 
     self.region = Shop::Regionalizable.country_to_region(frozen_address["country"])
+  end
+
+  def set_country_from_address
+    return if country.present?
+    return unless frozen_address.present? && frozen_address["country"].present?
+
+    self.country = frozen_address["country"].upcase
   end
 
   def assign_default_user

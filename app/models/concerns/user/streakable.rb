@@ -4,9 +4,15 @@ module User::Streakable
   # How long a streak sync holds off the next throttled sync (sync_streak_if_stale!).
   STREAK_SYNC_THROTTLE = 15.minutes
 
+  # How long a hand-triggered sync (sync_streak_now!) holds off the next one.
+  MANUAL_STREAK_SYNC_THROTTLE = 20.seconds
+
+  # Returned for a calendar day no Sticky Streak run dresses up.
+  NO_STICKY_DAY = { sticky_day: nil, sticky_streak_id: nil, sticky_reward: nil, sticky_claimable: false }.freeze
+
   included do
     has_many :streak_activities, dependent: :destroy
-    has_one :sticky_streak, dependent: :destroy
+    has_many :sticky_streaks, dependent: :destroy
   end
 
   def streak_today_date
@@ -59,6 +65,18 @@ module User::Streakable
     sync_streak!
   end
 
+  # Someone pressing refresh wants numbers they can see now, so sync inline
+  # rather than queueing. Its own short window keeps a mashed button off
+  # Hackatime; the shared window is armed too so no background sync piles on.
+  def sync_streak_now!
+    return unless hackatime_identity.present?
+    return if Rails.cache.read(manual_streak_sync_key)
+
+    Rails.cache.write(manual_streak_sync_key, true, expires_in: MANUAL_STREAK_SYNC_THROTTLE)
+    Rails.cache.write(streak_sync_throttle_key, true, expires_in: STREAK_SYNC_THROTTLE)
+    StreakActivity.sync_for_user!(self)
+  end
+
   # Most recent day (streak-day granularity) the user logged any Hackatime
   # coding time. Read straight from streak_activities, so no live Hackatime
   # call — nil if they've never logged time on a linked project.
@@ -68,10 +86,36 @@ module User::Streakable
 
   def sticky_streaks_enabled? = StickyStreak.enabled_for?(self)
 
-  # The run to show and redeem against, or nil while the challenge is switched
-  # off. Read this rather than the raw association.
-  def current_sticky_streak
-    sticky_streak if sticky_streaks_enabled?
+  # Every run to show and redeem against, newest first, or nothing while the
+  # challenge is switched off. Read this rather than the raw association: a
+  # finished run keeps unclaimed stickers claimable after the next one starts,
+  # so more than one can be live at a time.
+  def current_sticky_streaks
+    return [] unless sticky_streaks_enabled?
+
+    @current_sticky_streaks ||= sticky_streaks.includes(:claims)
+      .sort_by { |run| [ run.started_on, run.id ] }
+      .reverse
+  end
+
+  # The newest run, which is the one the widget's status line talks about.
+  def current_sticky_streak = current_sticky_streaks.first
+
+  # Runs with a sticker earned but not yet taken home, newest first.
+  def claimable_sticky_streak_runs = current_sticky_streaks.select(&:latest_claimable_day)
+
+  # The run the user may begin right now, or nil. One restart after a broken
+  # first run, and one second streak once either run has reached day 21. A
+  # broken restart, or a broken second streak, is the end of the line.
+  def startable_sticky_streak_kind
+    return nil unless sticky_streaks_enabled?
+
+    runs = current_sticky_streaks.index_by(&:kind)
+    return :first if runs.empty?
+    return :retry if runs["first"]&.failed? && runs["retry"].nil?
+    return :second if runs["second"].nil? && runs.values_at("first", "retry").compact.any?(&:finished?)
+
+    nil
   end
 
   def streak_week_activities(activities: nil, today: streak_today_date)
@@ -91,7 +135,7 @@ module User::Streakable
     )
     completed = activities_by_date.values.select(&:completed?).map(&:activity_date).to_set
 
-    sticky = current_sticky_streak
+    runs = current_sticky_streaks
 
     (cal_start..cal_end).map do |date|
       done = completed.include?(date)
@@ -104,9 +148,21 @@ module User::Streakable
         future: date > today,
         streak_left: done && completed.include?(date - 1.day) && date.wday != 0,
         streak_right: done && completed.include?(date + 1.day) && date.wday != 6,
-        **sticky_day_fields(sticky, date)
+        **sticky_day_fields(runs, date)
       }
     end
+  end
+
+  # Days a helper marked kept by hand, newest first, for the admin credit panel.
+  def streak_credits
+    streak_activities.manually_credited.includes(:manual_credit_by).order(activity_date: :desc)
+  end
+
+  # The month the credit calendar opens on: the person's current month, held
+  # inside the months the program actually ran.
+  def streak_calendar_month
+    streak_today_date.beginning_of_month
+      .clamp(StreakActivity::CALENDAR_FIRST_MONTH, StreakActivity::CALENDAR_LAST_MONTH)
   end
 
   def streak_next_day_at
@@ -120,6 +176,10 @@ module User::Streakable
 
   def streak_sync_throttle_key
     "streak_sync:#{id}"
+  end
+
+  def manual_streak_sync_key
+    "streak_sync_manual:#{id}"
   end
 
   def calculate_current_streak
@@ -138,8 +198,7 @@ module User::Streakable
 
   def build_day_list(from, to, today, activities: nil)
     activities_by_date = index_streak_activities(activities, from..to)
-    sticky = current_sticky_streak
-
+    runs = current_sticky_streaks
 
     (from..to).map do |date|
       {
@@ -149,7 +208,7 @@ module User::Streakable
         completed: activities_by_date[date]&.completed? || false,
         today: date == today,
         future: date > today,
-        **sticky_day_fields(sticky, date)
+        **sticky_day_fields(runs, date)
       }
     end
   end
@@ -160,12 +219,15 @@ module User::Streakable
     (activities || streak_activities.for_range(range)).index_by(&:activity_date)
   end
 
-  # Sticky Streak decoration for one calendar day: which challenge day it is,
-  # the sticker it pays out, and whether it is ready to claim.
-  def sticky_day_fields(sticky, date)
-    return { sticky_day: nil, sticky_reward: nil, sticky_claimable: false } unless sticky&.decorates?(date)
+  # Sticky Streak decoration for one calendar day: which run and challenge day
+  # it is, the sticker it pays out, and whether it is ready to claim. Runs
+  # arrive newest first, so a restart wins any date its predecessor also covers.
+  def sticky_day_fields(runs, date)
+    run = runs.find { |candidate| candidate.decorates?(date) }
+    return NO_STICKY_DAY unless run
 
-    day = sticky.day_for(date)
-    { sticky_day: day, sticky_reward: sticky.rewards_by_day[day], sticky_claimable: sticky.claimable_day?(day) }
+    day = run.day_for(date)
+    { sticky_day: day, sticky_streak_id: run.id,
+      sticky_reward: run.rewards_by_day[day], sticky_claimable: run.claimable_day?(day) }
   end
 end

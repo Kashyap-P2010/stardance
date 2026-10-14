@@ -10,6 +10,7 @@
 #  feedback                  :text
 #  internal_reason           :text
 #  lock_version              :integer          default(0), not null
+#  payout_multiplier         :float
 #  proof_video_url           :string
 #  recert_reason             :text
 #  reversed_at               :datetime
@@ -29,6 +30,7 @@
 #  index_certification_ship_reviews_on_decided_at                 (decided_at)
 #  index_certification_ship_reviews_on_external_certification_id  (external_certification_id) UNIQUE
 #  index_certification_ship_reviews_on_post_ship_event_id         (post_ship_event_id)
+#  index_certification_ship_reviews_on_project_id                 (project_id)
 #  index_certification_ship_reviews_on_reviewer_id                (reviewer_id)
 #  index_ship_reviews_unique_pending_project                      (project_id) UNIQUE WHERE (status = 0)
 #
@@ -82,13 +84,15 @@ module Certification
       approved: 1,
       returned: 2,
       misfiled: 3,
-      withdrawn: 4
+      withdrawn: 4,
+      permanently_rejected: 5
     }, default: :pending
 
     EXTERNAL_DECISION_MAP = { "APPROVED" => :approved, "REJECTED" => :returned }.freeze
     EXTERNAL_CERTIFICATION_ID_PATTERN = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z/
     PROOF_VIDEO_URL_MAX_LENGTH = 2_048
     PROOF_VIDEO_URL_PATTERN = %r{\Ahttps?://\S+\z}
+    FEEDBACK_MAX_LENGTH = 10_000
 
     def assign_external_certification_id!(cert_id)
       cert_id = cert_id.to_s
@@ -119,6 +123,19 @@ module Certification
       false
     end
 
+    def chain_pending_return
+      return nil unless approved? && external_certification_id.present? && post_ship_event_id.present?
+
+      proj = project
+      return nil unless proj
+
+      active_return = proj.ship_reviews.pending.where.not(returned_by_id: nil)
+                          .find_by(post_ship_event_id: post_ship_event_id)
+      return nil unless active_return
+
+      transfer_external_certification_id_to!(active_return) ? active_return : nil
+    end
+
     ACCEPTED_VIDEO_TYPES = %w[video/mp4 video/webm video/quicktime].freeze
 
     # Canned request-changes responses offered on the review form. The opener
@@ -146,7 +163,7 @@ module Certification
       }
     ].freeze
 
-    validates :feedback, length: { maximum: 10_000 }, allow_blank: true
+    validates :feedback, length: { maximum: FEEDBACK_MAX_LENGTH }, allow_blank: true
     validates :proof_video_url, length: { maximum: PROOF_VIDEO_URL_MAX_LENGTH },
                                 format: { with: PROOF_VIDEO_URL_PATTERN, message: "must be an http(s) URL" },
                                 allow_blank: true
@@ -154,6 +171,10 @@ module Certification
               content_type: { in: ACCEPTED_VIDEO_TYPES, spoofing_protection: true }
     validates :bonus_stardust,
               numericality: { greater_than_or_equal_to: 0, less_than_or_equal_to: 100 },
+              allow_nil: true
+
+    validates :payout_multiplier,
+              numericality: { greater_than: 0, less_than_or_equal_to: 100 },
               allow_nil: true
 
     scope :for_reviewer, ->(user) {
@@ -186,12 +207,35 @@ module Certification
     # The other half: certifications a hardware mission reviews on its own dash.
     scope :in_hardware_mission_queue, -> { joins(:project).merge(::Project.hardware.with_hardware_mission) }
 
+    def self.find_by_external(uuid: nil, external_id: nil)
+      cert = resolve_external(uuid: uuid, external_id: external_id)
+      return nil if cert.nil? || cert.project&.hardware?
+
+      cert
+    end
+
+    def self.resolve_external(uuid:, external_id:)
+      if uuid.present? && uuid.to_s.match?(EXTERNAL_CERTIFICATION_ID_PATTERN)
+        by_uuid = find_by(external_certification_id: uuid)
+        return by_uuid if by_uuid
+      end
+
+      return nil unless external_id.present? && external_id.to_s.match?(ExternalDashboard::Client::EXTERNAL_ID_PATTERN)
+
+      # external_certification_id: nil - a cert that already has a UUID on file
+      # must match on that UUID; the bare-id fallback only resolves certs we
+      # haven't linked yet, so a mismatched/forged uuid can't hijack one that's
+      # already correctly identified.
+      find_by(id: external_id.to_s.to_i, external_certification_id: nil)
+    end
+    private_class_method :resolve_external
+
     def self.available_for(user)
       # Chained AFTER the merge on purpose: `merge` would replace this project_id
       # filter with for_reviewer's own project_id condition and drop the fraud
       # hold-back. A pending fraud report keeps the project out of the queue
       # until the fraud team clears it.
-      super.merge(for_reviewer(user)).where.not(project_id: fraud_flagged_project_ids)
+      super.merge(for_reviewer(user)).without_rejection_hold.where.not(project_id: fraud_flagged_project_ids)
     end
 
     # Claim-next for the software queue. The hardware queue has its own
@@ -425,12 +469,19 @@ module Certification
     # Stardust earned per completed review
     REVIEW_BOUNTY = 1.25 # This will be updated once we add the project types.
 
+    # Set when a verdict is mirrored back from the external dashboard for a project we
+    # can't act on any more - deleted, or the owner is banned. The status still gets
+    # recorded so both queues agree on what happened, but nothing downstream fires: no
+    # bounty, no project transition, no DM to the builder.
+    attr_accessor :record_verdict_only
+
     before_save :stamp_claimed_at, if: -> { will_save_change_to_reviewer_id? && reviewer_id.present? && claimed_at.nil? }
     before_save :stamp_decided_at, if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && decided_at.nil? }
-    before_save :assign_stardust_earned, if: -> { will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && reviewer_id.present? }
-    after_save :apply_verdict_to_project!, if: :saved_change_to_status?
-    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && decided? }
-    after_save_commit :post_verdict_to_hardware_review_channel!, if: -> { saved_change_to_status? && decided? && project&.hardware? }
+    before_save :assign_stardust_earned, if: -> { !record_verdict_only && will_save_change_to_status? && status_change&.last.in?(DECIDED_STATUSES) && reviewer_id.present? }
+    after_save :apply_verdict_to_project!, if: -> { saved_change_to_status? && !record_verdict_only }
+    after_save_commit :notify_owner!, if: -> { saved_change_to_status? && decided? && !record_verdict_only }
+    after_save_commit :post_verdict_to_hardware_review_channel!, if: -> { saved_change_to_status? && decided? && project&.hardware? && !record_verdict_only }
+    after_save_commit :post_approval_to_hardware_feed!, if: -> { saved_change_to_status? && approved? && project&.hardware? && !record_verdict_only }
     after_create_commit :post_submission_to_hardware_review_channel!, if: -> { project&.hardware? }
 
     # Timeline cards for decided reviews sort by when the verdict landed.
@@ -532,6 +583,9 @@ module Certification
             project.start_review! if project.may_start_review?
             project.return_for_changes! if project.may_return_for_changes?
           end
+        when :permanently_rejected
+          ship_event&.update!(certification_status: "rejected", feedback_reason: feedback)
+          project.update!(ship_status: :rejected)
         end
       end
     end
@@ -552,10 +606,10 @@ module Certification
 
     def create_ysws_review_for_ship(ship_event)
       unless owner
-        Sentry.capture_message(
+        OperationalAlert.report(
           "Ship certification approved but no owner found to create YSWS review",
-          level: :error,
-          extra: {
+          severity: :error,
+          context: {
             ship_cert_id: id,
             project_id: project.id,
             ship_event_id: ship_event.id
@@ -576,6 +630,7 @@ module Certification
     # Software keeps the direct DM: its approval copy sends the project off to
     # voting, which hardware never enters.
     def notify_owner!
+      return notify_permanent_rejection! if permanently_rejected?
       return notify_owner_of_build! if project&.hardware?
 
       notify_owner_by_slack!
