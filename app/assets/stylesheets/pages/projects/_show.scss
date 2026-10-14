@@ -2690,8 +2690,26 @@ turbo-frame#project_hero {
   background: var(--color-set-2-bg);
   display: flex;
   flex-direction: column;
-  max-height: 220px;
+  // Not a whole number of rows, so the last visible project is cut off and
+  // the list reads as scrollable even where scrollbars auto-hide.
+  max-height: 300px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-input) transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-border-input);
+    border-radius: 4px;
+  }
 
   &[hidden] {
     display: none;
