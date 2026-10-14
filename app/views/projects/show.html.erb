@@ -1135,7 +1135,8 @@
         an editable textarea, and "Ship!" submits straight to ships#create. %>
     <dialog id="ship-post-modal-<%= @project.id %>"
             class="ship-modal ship-modal--post"
-            data-controller="modal composer"
+            data-controller="modal composer markdown-preview"
+            data-markdown-preview-url-value="<%= markdown_preview_path %>"
             data-composer-max-files-value="<%= Post::ShipEvent::MAX_ATTACHMENTS %>"
             data-composer-simple-mode-value="true"
             data-composer-target="dropZone"
@@ -1186,17 +1187,39 @@
                   <span class="project-show__latest-ship-time">· just now</span>
                 </p>
 
-                <%= form.text_area :ship_update,
-                      class: "ship-modal__textarea",
-                      rows: 4,
-                      required: true,
-                      maxlength: Post::ShipEvent::BODY_MAX_LENGTH,
-                      placeholder: "What did you make? What was challenging? What are you proud of? What should people know so they can test your project?",
-                      aria: { label: "Ship update" },
-                      data: { composer_target: "textarea",
-                              controller: "mention-autocomplete",
-                              action: "paste->textarea-hint#paste input->composer#autogrow input->composer#refreshSubmit keydown->mention-autocomplete#onKeydown input->mention-autocomplete#onInput blur->mention-autocomplete#onBlur" } %>
-                <p class="textarea-hint" data-textarea-hint-target="hint">Please write this yourself, humans read it!</p>
+                <%# Write / Preview — the ship body renders as markdown on the card,
+                    so let people see the formatted result before shipping. %>
+                <div class="ship-modal__md-bar">
+                  <div class="md-tabs" role="tablist">
+                    <button type="button" class="md-tabs__tab" role="tab" aria-selected="true"
+                            data-markdown-preview-target="writeTab"
+                            data-action="markdown-preview#showWrite">Write</button>
+                    <button type="button" class="md-tabs__tab" role="tab" aria-selected="false"
+                            data-markdown-preview-target="previewTab"
+                            data-action="markdown-preview#showPreview">Preview</button>
+                  </div>
+                  <button type="button" class="feed-composer__tool-btn" aria-label="Markdown formatting help"
+                          data-action="markdown-preview#openHelp">
+                    <%= inline_svg_tag "icons/question.svg", class: "feed-composer__tool-icon" %>
+                  </button>
+                </div>
+
+                <div data-markdown-preview-target="writePanel">
+                  <%= form.text_area :ship_update,
+                        class: "ship-modal__textarea",
+                        rows: 4,
+                        required: true,
+                        maxlength: Post::ShipEvent::BODY_MAX_LENGTH,
+                        placeholder: "What did you make? What was challenging? What are you proud of? What should people know so they can test your project?",
+                        aria: { label: "Ship update" },
+                        data: { composer_target: "textarea",
+                                markdown_preview_target: "input",
+                                controller: "mention-autocomplete",
+                                action: "invalid->markdown-preview#showWrite paste->textarea-hint#paste input->composer#autogrow input->composer#refreshSubmit keydown->mention-autocomplete#onKeydown input->mention-autocomplete#onInput blur->mention-autocomplete#onBlur" } %>
+                  <p class="textarea-hint" data-textarea-hint-target="hint">Please write this yourself, humans read it!</p>
+                </div>
+
+                <div class="ship-modal__md-preview md-preview markdown-content" data-markdown-preview-target="output" hidden></div>
 
                 <div class="feed-composer__attach-wrap feed-composer__attach-wrap--expanded" data-composer-target="attachWrap">
                   <label class="feed-composer__attach">
@@ -1263,6 +1286,7 @@
           <%= render BukuX3StatusComponent.new(user: current_user, compact: true) %>
         </div>
       <% end %>
+      <%= render "shared/markdown_help_dialog" %>
     </dialog>
 
   <% end %>

@@ -2216,6 +2216,23 @@ turbo-frame#project_hero {
   }
 }
 
+.ship-modal__md-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+}
+
+// Rendered preview of the ship body — same type size as the textarea so
+// toggling between Write and Preview doesn't jump.
+.ship-modal__md-preview {
+  min-height: 96px;
+  padding: 8px 12px;
+  border: 2px solid transparent;
+  font-size: 1.1875rem;
+  line-height: 1.3;
+}
+
 .ship-modal__actions {
   display: flex;
   gap: var(--space-s);
