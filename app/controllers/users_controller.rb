@@ -87,7 +87,7 @@ class UsersController < ApplicationController
 
   def profile_projects
     @user.projects
-         .includes(:users, banner_attachment: :blob, mission_attachments: { mission: { banner_attachment: :blob } })
+         .includes(:users, banner_attachment: :blob, mission_attachments: { mission: [ { banner_attachment: :blob }, { icon_attachment: :blob } ] })
          .order(created_at: :desc)
   end
 
