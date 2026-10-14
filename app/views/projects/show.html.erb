@@ -1439,7 +1439,7 @@
             <li class="mission-browse-modal__card">
               <div class="mission-browse-modal__card-icon">
                 <% if mission.icon.attached? %>
-                  <%= image_tag mission.icon, alt: "", class: "mission-browse-modal__card-icon-img" %>
+                  <%= image_tag mission.icon_thumb, alt: "", class: "mission-browse-modal__card-icon-img" %>
                 <% else %>
                   <span class="mission-browse-modal__card-icon-fallback" aria-hidden="true">&#10022;</span>
                 <% end %>

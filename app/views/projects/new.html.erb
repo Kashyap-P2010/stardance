@@ -43,7 +43,7 @@
                 <% if mission.banner.attached? %>
                   <%= image_tag mission.banner, alt: "", class: "project-creation__card-image" %>
                 <% elsif mission.icon.attached? %>
-                  <%= image_tag mission.icon, alt: "", class: "project-creation__card-icon-lg" %>
+                  <%= image_tag mission.icon_thumb, alt: "", class: "project-creation__card-icon-lg" %>
                 <% else %>
                   <div class="project-creation__card-placeholder"></div>
                 <% end %>
