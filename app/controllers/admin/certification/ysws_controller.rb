@@ -300,7 +300,7 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
   end
 
   def next_flow_step
-    [ flow_step + 1, flow_step_limit ].min
+    flow_step + 1
   end
 
   def flow_params(skip_ids = skipped_review_ids, step: flow_step)
@@ -335,6 +335,12 @@ class Admin::Certification::YswsController < Admin::Certification::ApplicationCo
   end
 
   def redirect_to_next_flow_review(skipped_ids: skipped_review_ids, step: flow_step, empty_notice:)
+    if step > flow_step_limit
+      redirect_to admin_certification_ysws_reviews_path,
+                  notice: "Review flow finished. You reached the #{flow_step_limit}-project limit."
+      return
+    end
+
     if (review = next_flow_review(skipped_ids))
       redirect_to admin_certification_ysws_review_path(review, flow_params(skipped_ids, step: step))
     else
