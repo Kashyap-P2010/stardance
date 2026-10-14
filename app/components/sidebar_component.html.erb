@@ -158,7 +158,7 @@
           <%= check_box_tag :disintegration_effects_enabled, "1", preference.disintegration_effects_enabled?, id: "disintegration_effects_enabled" %>
           <span>Show disintegration effects</span>
         </label>
-        <small class="settings-form__hint">Turn off all fragmenting and dissolving, including particles</small>
+        <small class="settings-form__hint">Turn on all fragmenting and dissolving, including particles</small>
       </div>
 
       <div class="settings-form__field">
@@ -167,7 +167,7 @@
           <%= check_box_tag :particle_effects_enabled, "1", preference.particle_effects_enabled?, id: "particle_effects_enabled" %>
           <span>Show disintegration particles</span>
         </label>
-        <small class="settings-form__hint">Turn off drifting particles</small>
+        <small class="settings-form__hint">Turn on drifting particles</small>
       </div>
 
       <% if user.slack_id.present? %>
