@@ -53,7 +53,7 @@ class Projects::DevlogsController < ApplicationController
   end
 
   def preview_time
-    authorize @project, :create_devlog?
+    authorize @project, :preview_devlog_time?
     load_preview_time
     respond_to do |format|
       format.html { render partial: "projects/devlogs/preview_time", locals: { preview_time: @preview_time, preview_seconds: @preview_seconds, hardware: @project.hardware?, token_stale: @token_stale } }

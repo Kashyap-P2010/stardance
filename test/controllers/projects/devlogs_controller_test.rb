@@ -35,6 +35,30 @@ class Projects::DevlogsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "You must link at least one Hackatime project before posting a devlog", flash[:alert]
   end
 
+  test "an admin impersonating a member can load their devlog preview time" do
+    User::HackatimeProject.create!(user: @owner, project: @project, name: "devlog-preview")
+    admin = User.create!(slack_id: "U_DEVLOG_ADMIN", display_name: "devlog_admin", email: "devlog_admin@example.test")
+    admin.grant_role!(:admin)
+    sign_in admin
+    post admin_user_impersonation_path(@owner)
+
+    HackatimeService.stub(:fetch_total_seconds_for_projects, 20.minutes.to_i) do
+      get preview_time_project_devlogs_path(@project)
+    end
+
+    assert_response :success
+    assert_includes response.body, "20m will be logged"
+  end
+
+  test "a non-member cannot load another project's devlog preview time" do
+    stranger = User.create!(slack_id: "U_DEVLOG_STRANGER", display_name: "devlog_stranger", email: "devlog_stranger@example.test")
+    sign_in stranger
+
+    get preview_time_project_devlogs_path(@project)
+
+    assert_response :forbidden
+  end
+
   private
 
   # A real 1x1 PNG so ActiveStorage's spoofing protection accepts it.
