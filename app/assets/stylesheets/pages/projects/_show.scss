@@ -1228,8 +1228,10 @@ turbo-frame#project_hero {
   object-fit: cover;
 }
 
+// Wraps instead of squeezing the buttons past the card edge on narrow screens.
 .project-show__latest-ship-cta {
   display: flex;
+  flex-wrap: wrap;
   gap: 18px;
   align-items: stretch;
 }
@@ -1238,7 +1240,7 @@ turbo-frame#project_hero {
 // set 4 (a light surface), so this is the *light-bg* variant per
 // branding §4.0. Same secondary/primary state matrix as `.project-show__pill`.
 .project-show__latest-ship-btn {
-  flex: 1;
+  flex: 1 1 8rem; // equal widths; wraps to a new row once they'd get narrower
   display: inline-flex;
   align-items: center;
   justify-content: center;
