@@ -10,10 +10,10 @@ class SearchController < ApplicationController
 
     q = params[:q].to_s.strip.delete_prefix("@").delete_prefix("#")
 
-    # Admins see every user. The audit log's "Performed By" filter has to be
-    # able to name an actor who is banned or has no Hack Club identity, and
-    # `discoverable` excludes both.
-    scope = current_user&.admin? ? User.all : User.discoverable.where(verification_status: "verified")
+    # Anyone who can read the audit log sees every user. Its "Performed By"
+    # filter has to be able to name an actor who is banned or has no Hack Club
+    # identity, and `discoverable` excludes both.
+    scope = audit_log_viewer? ? User.all : User.discoverable.where(verification_status: "verified")
     scope = scope.where.not(display_name: [ nil, "" ])
 
     if params[:id].present?
@@ -83,6 +83,10 @@ class SearchController < ApplicationController
   end
 
   private
+
+  def audit_log_viewer?
+    current_user.present? && Admin::PaperTrail::VersionPolicy.new(current_user, :version).index?
+  end
 
   def command_results(query, surface, current_path: nil)
     return [] unless surface == "command_palette"
