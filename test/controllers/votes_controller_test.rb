@@ -37,6 +37,26 @@ class VotesControllerTest < ActionDispatch::IntegrationTest
       assert Vote::Event.of_type("vote_assignment_viewed").where(vote_assignment: assignment).exists?
     end
 
+    test "timeline like buttons read one precomputed set instead of a query per devlog" do
+      ship_post = @target.post
+      devlogs = 3.times.map do |i|
+        devlog = Post::Devlog.new(body: "Progress #{i}", duration_seconds: 1.hour)
+        devlog.uploading_attachments = true
+        devlog.save!
+        Post.create!(project: ship_post.project, user: ship_post.user, postable: devlog, created_at: ship_post.created_at - 1.hour)
+        devlog
+      end
+      Like.create!(user: @voter, likeable: devlogs.first)
+
+      assert_queries_match(/SELECT 1 AS one FROM "likes"/, count: 0) do
+        get new_rate_url
+      end
+
+      assert_response :success
+      assert_select ".vote-page__timeline .like-button__btn--liked", 1
+      assert_select ".vote-page__timeline .like-button__btn", 3
+    end
+
     test "submitting a vote records attempt and submitted events" do
       get new_rate_url
       assignment = current_assignment

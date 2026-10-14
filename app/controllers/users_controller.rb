@@ -113,6 +113,7 @@ class UsersController < ApplicationController
       preload_timeline_postables(posts)
       posts = posts.select { |post| !post.repost? || post.visible_repost_original_for?(current_user) }
       @reposted_post_ids = reposted_post_ids_for(posts)
+      @liked_devlog_ids = liked_devlog_ids_for(posts)
       posts
     }
 
