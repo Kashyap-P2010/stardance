@@ -178,43 +178,55 @@ class ProjectsController < ApplicationController
       .find { |sub| sub&.rejected? }
 
     @votes_for_payout = nil
-    if current_user.present?
-      can_review_payout = @is_member || current_user.admin?
+    # Every ship whose ratings were locked keeps its own review, so an earlier
+    # ship's rating reasons stay reachable after the project ships again.
+    @payout_reviews = {}
+    if current_user.present? &&
+        Post::ShipEvent.payout_feature_enabled?(current_user) &&
+        (@is_member || current_user.admin?)
+      @votes_for_payout = payout_review_for(latest_ship_event) if payout_reviewable?(latest_ship_event)
+      @payout_reviews[latest_ship_event.id] = @votes_for_payout if @votes_for_payout
 
-      if Post::ShipEvent.payout_feature_enabled?(current_user) &&
-          can_review_payout &&
-          latest_ship_event.present? &&
-          latest_ship_event.certification_status == "approved" &&
-          !latest_ship_event.mission_submission&.rejected?
-
-        is_static = latest_ship_event.mission_submission&.payout_path == "static_prize"
-
-        required = Post::ShipEvent::VOTES_REQUIRED_FOR_PAYOUT
-        current = latest_ship_event.votes.payout_countable.count
-        remaining = [ required - current, 0 ].max
-
-        ratings_remaining = [ -latest_ship_event.payout_recipient.vote_balance, 0 ].max
-
-        @votes_for_payout = {
-          ship_event: latest_ship_event,
-          current: current,
-          required: required,
-          remaining: remaining,
-          ratings_remaining: ratings_remaining,
-          static_prize: is_static,
-          # Suppresses the payout checklist entirely; see PayoutVotesWidget.
-          hardware: @project.hardware?,
-          paid_out: latest_ship_event.payout.present?,
-          estimated_payout: latest_ship_event.estimated_payout,
-          review_open: latest_ship_event.payout_review_open?,
-          review_deadline: latest_ship_event.payout_review_deadline,
-          reason_votes: latest_ship_event.payout_basis_locked_at? ? latest_ship_event.payout_counted_votes : [],
-          admin_view: current_user.admin? && !@is_member
-        }
-      end
+      @project.ship_events
+        .where(certification_status: "approved")
+        .where.not(payout_basis_locked_at: nil)
+        .where.not(id: latest_ship_event&.id)
+        .each do |ship_event|
+          @payout_reviews[ship_event.id] = payout_review_for(ship_event) if payout_reviewable?(ship_event)
+        end
     end
   end
   private :prepare_project_show_context
+
+  def payout_reviewable?(ship_event)
+    ship_event.present? &&
+      ship_event.certification_status == "approved" &&
+      !ship_event.mission_submission&.rejected?
+  end
+  private :payout_reviewable?
+
+  def payout_review_for(ship_event)
+    required = Post::ShipEvent::VOTES_REQUIRED_FOR_PAYOUT
+    current = ship_event.votes.payout_countable.count
+
+    {
+      ship_event: ship_event,
+      current: current,
+      required: required,
+      remaining: [ required - current, 0 ].max,
+      ratings_remaining: [ -ship_event.payout_recipient.vote_balance, 0 ].max,
+      static_prize: ship_event.mission_submission&.payout_path == "static_prize",
+      # Suppresses the payout checklist entirely; see PayoutVotesWidget.
+      hardware: @project.hardware?,
+      paid_out: ship_event.payout.present?,
+      estimated_payout: ship_event.estimated_payout,
+      review_open: ship_event.payout_review_open?,
+      review_deadline: ship_event.payout_review_deadline,
+      reason_votes: ship_event.payout_basis_locked_at? ? ship_event.payout_counted_votes : [],
+      admin_view: current_user.admin? && !@is_member
+    }
+  end
+  private :payout_review_for
 
   # Ordinary hardware verdicts are public. Software feedback stays with the
   # project team, reviewers, admins and helpers.

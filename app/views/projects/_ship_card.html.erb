@@ -202,7 +202,7 @@
       <% if payout_review.present? && payout_review[:review_deadline].present? %>
         <button type="button"
                 class="project-show__latest-ship-btn"
-                onclick="document.getElementById('payout-review-modal').showModal()"
+                onclick="document.getElementById(<%= "payout-review-modal-#{ship.id}".to_json %>).showModal()"
                 aria-haspopup="dialog">
           <%= payout_review[:paid_out] ? "View rating reasons →" : "Review payout →" %>
         </button>

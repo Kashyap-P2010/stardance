@@ -1033,7 +1033,7 @@
                        ship_number: ship_count - ship_index + 1,
                        recert_modal_id: recert_id,
                        is_member: is_member,
-                       payout_review: entry.postable == @votes_for_payout&.dig(:ship_event) ? @votes_for_payout : nil,
+                       payout_review: @payout_reviews[entry.postable_id],
                        mission_resubmit_modal_id: mission_modal_id %>
           <% else %>
             <%= render PostComponent.new(post: entry, current_user: current_user, theme: :profile_dark, lazy_media: true, current_user_reposted_post_ids: @reposted_post_ids) %>
@@ -1042,8 +1042,10 @@
       </section>
     <% end %>
 
-    <% if @votes_for_payout&.dig(:review_deadline) %>
-      <%= render "projects/payout_review_modal", payout_review: @votes_for_payout %>
+    <% @payout_reviews.each_value do |payout_review| %>
+      <% if payout_review[:review_deadline] %>
+        <%= render "projects/payout_review_modal", payout_review: payout_review %>
+      <% end %>
     <% end %>
 
   </div>
