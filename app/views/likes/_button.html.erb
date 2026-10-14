@@ -15,7 +15,8 @@
 <div id="<%= dom_id(likeable, :like_button) %>"
      class="like-button"
      data-controller="like"
-     data-like-liked-value="<%= liked %>"
+     data-action="like:state@window->like#mirror"
+     data-like-liked-value="<%= liked.present? %>"
      data-like-count-value="<%= likeable.likes_count %>"
      data-like-url-value="<%= devlog_like_path(likeable) %>">
   <% if current_user %>
@@ -24,7 +25,7 @@
           class: button_classes,
           form: { class: "like-button__form", data: { action: "submit->like#toggle" } },
           data: { "like-target": "button" },
-          aria: { pressed: liked } do %>
+          aria: { pressed: liked.present?, label: "Like" } do %>
       <%= inline_svg_tag("icons/like.svg", class: "like-button__icon like-button__icon--outline") %>
       <%= like_fill_icon(likeable, css_class: "like-button__icon like-button__icon--fill") %>
       <span class="like-button__count" data-like-target="count"><%= likeable.likes_count %></span>

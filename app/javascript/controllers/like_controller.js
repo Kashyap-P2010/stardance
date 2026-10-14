@@ -38,7 +38,17 @@ export default class extends Controller {
     this.countValue = Math.max(0, this.countValue + (this.likedValue ? 1 : -1));
     if (this.likedValue) this.#animate();
 
+    this.#broadcast();
     this.#scheduleSync();
+  }
+
+  // The same devlog can have more than one heart on the page (its feed card
+  // and the open post panel), so the others follow whichever one changed.
+  mirror({ detail }) {
+    if (detail.source === this || detail.url !== this.urlValue) return;
+
+    this.likedValue = this.syncedLiked = detail.liked;
+    this.countValue = this.syncedCount = detail.count;
   }
 
   likedValueChanged() {
@@ -99,17 +109,34 @@ export default class extends Controller {
 
       // Adopt the authoritative count only if the user has settled on the
       // same state the server now reflects, so we don't clobber a re-toggle.
-      if (this.likedValue === data.liked) this.countValue = data.count;
+      if (this.likedValue === data.liked) {
+        this.countValue = data.count;
+        this.#broadcast();
+      }
     } catch {
       // Request failed (offline, 4xx, etc.) — roll back to the last
       // server-confirmed state.
       this.likedValue = this.syncedLiked;
       this.countValue = this.syncedCount;
+      this.#broadcast();
     } finally {
       this.inFlight = false;
       // The user toggled again while the request was in flight — keep syncing.
       if (this.likedValue !== this.syncedLiked) this.#scheduleSync();
     }
+  }
+
+  #broadcast() {
+    this.dispatch("state", {
+      target: window,
+      prefix: "like",
+      detail: {
+        source: this,
+        url: this.urlValue,
+        liked: this.likedValue,
+        count: this.countValue,
+      },
+    });
   }
 
   get #csrfToken() {

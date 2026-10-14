@@ -2,10 +2,9 @@ require "test_helper"
 
 class LikesControllerTest < ActionDispatch::IntegrationTest
   setup do
-    @author = User.create!(slack_id: "U_LIKE_AUTHOR", display_name: "likeauthor", email: "likeauthor@example.test")
-    @author.identities.create!(provider: "hack_club", uid: "hca_like_author", access_token: "fake-token-like-author")
-    @liker = User.create!(slack_id: "U_LIKE_LIKER", display_name: "likeliker", email: "likeliker@example.test")
-    @liker.identities.create!(provider: "hack_club", uid: "hca_like_liker", access_token: "fake-token-like-liker")
+    # Devlogs by authors without ID verification are hidden from likes (#1452).
+    @author = create_user(slack_id: "U_LIKE_AUTHOR", display_name: "likeauthor", verified: true)
+    @liker = create_user(slack_id: "U_LIKE_LIKER", display_name: "likeliker")
 
     @project = Project.create!(title: "Likeable Project", description: "A project with a likeable devlog")
     @project.memberships.create!(user: @author, role: :owner)
