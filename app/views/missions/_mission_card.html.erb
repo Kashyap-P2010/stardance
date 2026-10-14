@@ -17,7 +17,7 @@
                     ("mission-card--manageable" if manager_only)].compact.join(" ") do %>
   <div class="mission-card__icon" aria-hidden="true">
     <% if mission.icon.attached? %>
-      <%= image_tag mission.icon, alt: "", class: "mission-card__icon-img" %>
+      <%= image_tag mission.icon_thumb, alt: "", class: "mission-card__icon-img" %>
     <% else %>
       <%= inline_svg_tag "icons/star_outline.svg", class: "mission-card__icon-svg" %>
     <% end %>
@@ -30,6 +30,9 @@
     </p>
 
     <ul class="mission-card__meta" aria-label="Mission meta">
+      <% if mission.hardware? %>
+        <li class="mission-card__meta-item mission-card__meta-item--hardware">Hardware</li>
+      <% end %>
       <% if mission.difficulty.present? %>
         <li class="mission-card__meta-item mission-card__meta-item--difficulty mission-card__meta-item--difficulty-<%= mission.difficulty %>">
           <%= mission.difficulty.titleize %>

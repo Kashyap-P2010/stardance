@@ -2,10 +2,25 @@
     The button inside the verdict form references it via the HTML `form` attribute. %>
 <%= form_with url: admin_certification_ship_claim_path(ship), method: :delete,
       id: "unclaim-form-#{ship.id}" do %>
+  <%# Rendered on the combined hardware page so unclaiming returns there. %>
+  <% if local_assigns[:redirect_to_hardware] %>
+    <%= hidden_field_tag :redirect_to_hardware, ship.project_id %>
+  <% end %>
 <% end %>
 
-<%# The video-drop controller sits on the form (not the drop zone) so its
-    submitBtn target is in scope and it can block submits mid-upload. %>
+<%# Skip form (hardware queue only), rendered outside the verdict form for the
+    same nesting reason as unclaim; the button in the actions row submits it via
+    the `form` attribute. A persisted skip keeps this ship out of the reviewer's
+    next-up for the cooldown window instead of bouncing them straight back. %>
+<% if local_assigns[:redirect_to_hardware] %>
+  <%= form_with url: hardware_skip_path(stage: "build"), method: :post, id: "skip-form-#{ship.id}" do %>
+    <%= hidden_field_tag :token, "ship:#{ship.id}" %>
+  <% end %>
+<% end %>
+
+<div data-controller="certification--verdict-preview"
+     data-action="submit->certification--verdict-preview#intercept">
+
 <%= form_with model: ship, url: admin_certification_ship_path(ship), method: :patch, class: "review-form",
       data: { controller: "certification--video-drop certification--feedback-templates",
               action: "submit->certification--video-drop#guardSubmit",
@@ -14,6 +29,10 @@
               "certification--video-drop-done-class": "video-drop--done",
               "certification--video-drop-error-class": "video-drop--error",
               "certification--video-drop-direct-upload-url-value": rails_direct_uploads_url } do |f| %>
+<% if local_assigns[:redirect_to_hardware] %>
+  <%# Sends the verdict back to the combined hardware review page. %>
+  <%= hidden_field_tag :redirect_to_hardware, ship.project_id %>
+<% end %>
 <% if can_review && ship.claim_expires_at.present? %>
   <div class="review-form__claim-banner">
     <span>Claim active</span>
@@ -43,6 +62,19 @@
       <span>Reject</span>
     </label>
   </fieldset>
+
+  <% if ship.project&.hardware? %>
+    <div class="review-form__field">
+      <%= f.label :payout_multiplier, "Payout multiplier (stardust per hour)" %>
+      <%= f.number_field :payout_multiplier, step: 0.01, min: 0.01, max: 100,
+            placeholder: Post::ShipEvent::Payouts::HARDWARE_STARDUST_PER_HOUR,
+            value: ship.payout_multiplier,
+            class: "review-form__input" %>
+      <p class="review-form__hint">
+        Default is <%= Post::ShipEvent::Payouts::HARDWARE_STARDUST_PER_HOUR %> stardust/hr. Leave blank to use the default.
+      </p>
+    </div>
+  <% end %>
 
   <div class="review-form__field">
     <%= f.label :feedback, "Feedback for the user (visible to the project owner)" %>
@@ -115,7 +147,44 @@
   <div class="review-form__actions">
     <%= f.submit "Submit verdict", class: "action-btn action-btn--large action-btn--primary",
           data: { "certification--video-drop-target": "submitBtn" } %>
-    <%= link_to "Skip and get next", next_admin_certification_ships_path(skip: ship.id),
-          class: "action-btn action-btn--small action-btn--secondary" %>
+    <% if local_assigns[:redirect_to_hardware] %>
+      <button type="submit" form="skip-form-<%= ship.id %>"
+              class="action-btn action-btn--small action-btn--secondary">Skip and get next</button>
+    <% else %>
+      <%= link_to "Skip and get next", next_admin_certification_ships_path(skip: ship.id),
+            class: "action-btn action-btn--small action-btn--secondary" %>
+    <% end %>
   </div>
 <% end %>
+
+<%# Reuses the shared .modal shell + `modal` controller (backdrop, esc,
+    scroll-lock); the verdict-preview controller only builds the preview and
+    re-submits on confirm. %>
+<dialog class="modal verdict-preview" data-controller="modal"
+        data-certification--verdict-preview-target="modal"
+        aria-labelledby="verdict-preview-title">
+  <h3 id="verdict-preview-title" class="modal__title">
+    Confirm verdict
+    <span class="status-pill" data-certification--verdict-preview-target="verdict"></span>
+  </h3>
+  <p class="modal__description">Take one last look before this is sent to the user.</p>
+
+  <div class="modal__field" data-certification--verdict-preview-target="feedbackBlock">
+    <label>Feedback</label>
+    <p class="modal__description verdict-preview__feedback" data-certification--verdict-preview-target="feedback"></p>
+  </div>
+  <p class="modal__description" data-certification--verdict-preview-target="noFeedback">No feedback written.</p>
+
+  <div class="modal__actions">
+    <button type="button" class="action-btn action-btn--secondary"
+            data-action="click->modal#close">
+      Go back
+    </button>
+    <button type="button" class="action-btn action-btn--primary" autofocus
+            data-action="click->certification--verdict-preview#confirm">
+      Confirm &amp; submit
+    </button>
+  </div>
+</dialog>
+
+</div>

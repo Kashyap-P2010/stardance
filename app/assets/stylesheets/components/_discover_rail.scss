@@ -9,10 +9,81 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  z-index: 20;
+
+  @media (max-width: 1280px) {
+    top: var(--space-m);
+    right: 0;
+    bottom: var(--space-m);
+    width: min(360px, calc(100vw - 64px));
+    max-height: none;
+    padding: var(--space-m);
+    border: 2px solid var(--color-border-input);
+    border-right: 0;
+    border-radius: var(--profile-radius) 0 0 var(--profile-radius);
+    background: var(--color-space-bg);
+    box-shadow: 0 16px 40px var(--color-shadow-deep);
+    overflow: visible;
+    transform: translateX(100%);
+    transition: transform 180ms ease;
+
+    &--open {
+      transform: translateX(0);
+    }
+  }
+
+  @media (max-width: 960px) {
+    bottom: 84px;
+  }
+}
+
+.discover-rail__toggle {
+  display: none;
+
+  @media (max-width: 1280px) {
+    position: absolute;
+    top: 18px;
+    left: -48px;
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 2px solid var(--color-border-input);
+    border-right: 0;
+    border-radius: var(--profile-radius) 0 0 var(--profile-radius);
+    background: var(--color-set-2-bg);
+    color: var(--color-brand-off-white);
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      border-color: var(--color-brand-blue);
+      outline: 0;
+    }
+  }
+}
+
+.discover-rail__toggle-icon {
+  width: 18px;
+  height: 18px;
+  transform: rotate(90deg);
+  transition: transform 180ms ease;
+
+  .discover-rail--open & {
+    transform: rotate(-90deg);
+  }
+}
+
+.discover-rail__panel {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
   gap: 14px;
 
   @media (max-width: 1280px) {
-    display: none;
+    overflow-y: auto;
   }
 }
 
@@ -20,6 +91,10 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.discover-rail__widget-frame {
+  display: block;
 }
 
 .discover-rail__search {
@@ -185,6 +260,23 @@
   gap: 11px;
 }
 
+.discover-rail__heading-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.discover-rail__heading-link {
+  color: var(--color-space-text-muted);
+  font-family: var(--font-family-text);
+  font-size: var(--font-size-xs);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--color-space-text);
+  }
+}
+
 .discover-rail__heading {
   color: var(--color-space-text);
   font-family: var(--font-family-text);
@@ -251,86 +343,6 @@
   &:hover,
   &:focus-visible {
     color: var(--color-brand-highlight);
-  }
-}
-
-// --- Voting payout notice widget ---
-
-.voting-payout-notice {
-  &__card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-xs);
-    padding: var(--space-s);
-    border-radius: var(--profile-radius);
-    background: var(--color-brand-highlight-faint);
-    border: 1px solid var(--color-brand-highlight-soft);
-  }
-
-  &__body {
-    margin: 0;
-    font-family: var(--font-family-text);
-    font-size: var(--font-size-s);
-    color: var(--color-brand-off-white);
-    line-height: 1.5;
-  }
-
-  &__threshold {
-    color: var(--color-brand-highlight);
-    font-weight: 700;
-  }
-
-  &__progress-wrap {
-    display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-  }
-
-  &__progress {
-    flex: 1;
-    appearance: none;
-    height: 6px;
-    border-radius: 99px;
-    border: none;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.12);
-
-    &::-webkit-progress-bar {
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 99px;
-    }
-
-    &::-webkit-progress-value {
-      background: var(--color-brand-highlight);
-      border-radius: 99px;
-    }
-
-    &::-moz-progress-bar {
-      background: var(--color-brand-highlight);
-      border-radius: 99px;
-    }
-  }
-
-  &__progress-label {
-    flex-shrink: 0;
-    font-family: var(--font-family-text);
-    font-size: var(--font-size-xs);
-    color: var(--color-brand-highlight);
-    font-weight: 600;
-  }
-
-  &__cta {
-    align-self: flex-start;
-    font-family: var(--font-family-text);
-    font-size: var(--font-size-s);
-    font-weight: 600;
-    color: var(--color-brand-highlight);
-    text-decoration: none;
-
-    &:hover,
-    &:focus-visible {
-      text-decoration: underline;
-    }
   }
 }
 
@@ -552,6 +564,46 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.referral-widget__label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-space-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.referral-widget__url {
+  display: block;
+  width: 100%;
+  padding: var(--space-xxs) var(--space-xs);
+  background: var(--color-overlay-light-soft);
+  border: 1px solid var(--color-overlay-light);
+  border-radius: var(--profile-radius);
+  color: var(--color-space-text);
+  font-family: var(--font-family-text);
+  font-size: var(--font-size-xs);
+  text-align: left;
+  word-break: break-all;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--color-border-input);
+  }
+}
+
+.referral-widget__stats {
+  display: flex;
+  gap: var(--space-m);
+  color: var(--color-space-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.referral-widget__count {
+  color: var(--color-space-text);
+  font-weight: 700;
 }
 
 // --- Daily star roll widget ---
@@ -803,6 +855,22 @@
   .action-btn {
     flex: 1 1 auto;
   }
+
+  // reroll uses button_to, which wraps the button in a <form>. Collapse it so
+  // the button itself becomes the flex item and matches copy-to-share. (The
+  // .reroll-control poll wrapper is collapsed globally, see _rng.scss.)
+  form.button_to {
+    display: contents;
+  }
+}
+
+// "rerolled +N" — shown once the earned reroll has been spent (the number
+// above already reflects the summed total). Takes its own line in the wrap.
+.daily-roll-widget__reroll-note {
+  color: var(--color-space-text-muted);
+  flex: 1 1 100%;
+  font-size: var(--font-size-s);
+  text-align: center;
 }
 
 // The reveal is skipped in JS under reduced motion, but the CSS-driven

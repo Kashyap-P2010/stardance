@@ -30,6 +30,7 @@
 #  hcb_keyword_lock                  :string
 #  hcb_merchant_lock                 :string
 #  hcb_one_time_use                  :boolean          default(FALSE)
+#  hcb_org_slug                      :string
 #  hcb_preauthorization_instructions :text
 #  internal_description              :string
 #  limited                           :boolean
@@ -197,6 +198,73 @@ class ShopItem < ApplicationRecord
     "#{SHOP_PAGE_CACHE_KEY}/v=#{version}"
   end
 
+  # Top affordable items for a user, for payout-email recommendations. Reuses the
+  # cached shop-page set (already enabled/listed/buyable, non-prize, with stock +
+  # purchase counts preloaded) so it adds no extra catalog queries. Only items
+  # available in the user's region and within their balance at the real
+  # region/user price are eligible (price_for_user is computed once per item and
+  # stashed for display, so the email shows exactly what it filtered on). Items
+  # the user has wishlisted come first (highest intent), then the most popular
+  # affordable items fill the rest. Fails closed to [] so a payout email never
+  # breaks on a recommendation error.
+  def self.affordable_for(user, limit: 3)
+    region  = recommended_region_for(user)
+    balance = user.balance
+
+    priced = cached_shop_page_data[:buyable_standalone]
+      .reject(&:is_free?)
+      .reject(&:out_of_stock?)
+      .select { |item| item.enabled_in_region?(region) }
+      .map    { |item| [ item, item.price_for_user(user, region) ] }
+      .select { |(_item, price)| price <= balance }
+
+    wishlisted_ids = user.wishlisted_shop_items.pluck(:id).to_set
+    ordered = priced
+      .partition { |(item, _price)| wishlisted_ids.include?(item.id) }
+      .flat_map  { |group| group.sort_by { |(item, _price)| -item.current_event_purchases } }
+      .first(limit)
+
+    ordered.map do |(item, price)|
+      item.instance_variable_set(:@recommended_from_wishlist, wishlisted_ids.include?(item.id))
+      item.instance_variable_set(:@recommended_price, price)
+      item
+    end
+  rescue => e
+    Rails.logger.warn("ShopItem.affordable_for failed for user #{user&.id}: #{e.message}")
+    []
+  end
+
+  # Region for payout-email recommendations. Mirrors the shop's user-data region
+  # resolution (shop_region -> saved regions -> primary/first address country) so
+  # emailed items + prices match what the recipient sees in the shop. The shop's
+  # request-only fallbacks (GeoIP cookie, timezone) aren't available in a mailer,
+  # so we end on "US" like the shop's final default.
+  def self.recommended_region_for(user)
+    return user.shop_region if user.shop_region.present?
+    return user.regions.first if user.has_regions?
+
+    addresses = Array(user.addresses)
+    address   = addresses.find { |a| a["primary"] } || addresses.first
+    country   = address && address["country"]
+    region    = Shop::Regionalizable.country_to_region(country) if country.present?
+    region.presence || "US"
+  end
+
+  # True when affordable_for surfaced this item because the user wishlisted it.
+  def recommended_from_wishlist?
+    instance_variable_defined?(:@recommended_from_wishlist) && @recommended_from_wishlist
+  end
+
+  # The region/user price affordable_for filtered + should display (falls back to
+  # ticket_cost outside the recommendation flow).
+  def recommended_price
+    instance_variable_defined?(:@recommended_price) ? @recommended_price : ticket_cost
+  end
+
+  # User allowed to create/enable shop items without the "check with Amber
+  # first" guard in the admin item form.
+  AMBER_USER_ID = 355
+
   MANUAL_FULFILLMENT_TYPES = [
     "ShopItem::HCBGrant",
     "ShopItem::HCBPreauthGrant",
@@ -212,12 +280,14 @@ class ShopItem < ApplicationRecord
     "ShopItem::HCBPreauthGrant",
     "ShopItem::HQMailItem",
     "ShopItem::LetterMail",
+    "ShopItem::NonmachinableLetterMail",
     "ShopItem::ThirdPartyPhysical",
     "ShopItem::ThirdPartyDigital",
     "ShopItem::WarehouseItem",
     "ShopItem::SpecialFulfillmentItem",
     "ShopItem::HackClubberItem",
     "ShopItem::FreeStickers",
+    "ShopItem::StickyStreakSticker",
     "ShopItem::SillyItemType",
     "ShopItem::OutpostTicket"
   ].freeze
@@ -319,12 +389,25 @@ class ShopItem < ApplicationRecord
     sale_percentage.present? && sale_percentage > 0
   end
 
-  # Per-user effective price. Most items ignore the user and just use the
-  # regional price; ShopItem::OutpostTicket overrides this to subtract the
-  # user's accrued discount. This is the price enforced at purchase (see
-  # ShopOrder#freeze_item_price).
+  # Per-user effective price. Subclasses may override to vary price by user;
+  # the default just uses the regional price. This is the price enforced at
+  # purchase (see ShopOrder#freeze_item_price).
   def price_for_user(_user, region)
     price_for_region(region)
+  end
+
+  # What this item costs Hack Club to fulfill into a region, in USD: the base
+  # cost plus that region's offset, falling back to the catch-all offset. A
+  # blank region means no offset rather than the catch-all, since we do not
+  # know yet where it is going.
+  def usd_cost_for_region(region)
+    (usd_cost || 0) + usd_offset_for_region(region)
+  end
+
+  def usd_offset_for_region(region)
+    return 0 if region.blank?
+
+    send("usd_offset_#{region.downcase}") || usd_offset_xx || 0
   end
 
   def fixed_estimate(price)
@@ -446,9 +529,10 @@ class ShopItem < ApplicationRecord
   # True iff this item is gated by mission_shop_unlocks AND the user has not
   # completed any of the unlocking missions yet. Items with no shop_unlocks
   # are never mission-locked; mission_prize_only items are unlocked by
-  # showing up via the redemption flow, not this gate.
+  # showing up via the redemption flow, not this gate. `empty?` reads preloaded
+  # unlocks (the shop grid preloads them) and falls back to a query otherwise.
   def mission_locked_for?(user)
-    return false unless mission_shop_unlocks.exists?
+    return false if mission_shop_unlocks.empty?
     return true unless user
     (unlocking_missions.pluck(:id) & user.completed_mission_ids.to_a).empty?
   end

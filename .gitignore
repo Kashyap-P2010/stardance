@@ -10,6 +10,9 @@
 # Ignore all environment files.
 /.env*
 
+# Local-only Docker Compose overrides (per-developer ports/env, may hold secrets).
+/docker-compose.override.yml
+
 # Ignore all logfiles and tempfiles.
 /log/*
 /tmp/*
@@ -71,7 +74,7 @@ prod_backupgg.dump
 prod.dump
 
 # Ferret vector search sidecar database
-/db/ferret.sqlite3*
+/db/ferret/*.sqlite3*
 vendor
 
 .venv

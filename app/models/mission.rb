@@ -17,6 +17,7 @@
 #  fixed_stardust_payout        :integer
 #  guide_sections_count         :integer
 #  guide_url                    :string
+#  hardware                     :boolean          default(FALSE), not null
 #  name                         :string           not null
 #  prizes_count                 :integer          default(0), not null
 #  slug                         :string           not null
@@ -38,7 +39,11 @@ class Mission < ApplicationRecord
 
   has_paper_trail
 
-  has_one_attached :icon
+  # Icons are uploaded at any size (some are 4K) but mostly render at 64px or
+  # less, so small spots use the :thumb variant via #icon_thumb.
+  has_one_attached :icon do |attachable|
+    attachable.variant :thumb, resize_to_limit: [ 128, 128 ], saver: { strip: true }
+  end
   has_one_attached :banner
 
   has_many :steps, class_name: "Mission::Step", dependent: :destroy
@@ -46,6 +51,7 @@ class Mission < ApplicationRecord
   has_many :memberships, class_name: "Mission::Membership", dependent: :destroy
   has_many :shop_unlocks, class_name: "Mission::ShopUnlock", dependent: :destroy
   has_many :submissions, class_name: "Mission::Submission", dependent: :destroy
+  has_many :prize_redemptions, class_name: "Mission::PrizeRedemption", dependent: :destroy
   has_many :attachments, class_name: "Project::MissionAttachment", dependent: :destroy
   has_many :projects, through: :attachments
   has_many :guide_variants, -> { order(:position, :id) },
@@ -70,6 +76,13 @@ class Mission < ApplicationRecord
 
   DIFFICULTIES = %w[beginner intermediate advanced].freeze
   enum :difficulty, DIFFICULTIES.index_with(&:itself), prefix: true
+
+  # Flipping a mission to hardware converts its already-attached software
+  # projects to hardware (see Mission::MigrateProjectsToHardwareJob). Runs after
+  # commit so the job sees the persisted flag; flipping back to software leaves
+  # projects untouched (a genuinely hardware project shouldn't revert).
+  after_update_commit :migrate_attached_projects_to_hardware,
+                      if: -> { saved_change_to_hardware? && hardware? }
 
   validates :slug, presence: true, uniqueness: true,
                    format: { with: /\A[a-z0-9][a-z0-9_-]*\z/, message: "must be URL-safe" },
@@ -125,6 +138,12 @@ class Mission < ApplicationRecord
   def has_prizes? = prizes.any?
   def has_prerequisites? = prerequisites.any?
 
+  # Whether projects shipped to this mission go into community rating. A fixed
+  # stardust payout forces the static-prize path, which is hard-excluded from
+  # the voteable pool (see Post::ShipEvent.voteable); every other mission lets
+  # its submissions be rated.
+  def submissions_enter_rating? = !fixed_stardust_payout&.positive?
+
   def prerequisites_met_by?(user)
     return true unless has_prerequisites?
     return false if user.nil?
@@ -140,6 +159,14 @@ class Mission < ApplicationRecord
   def achievement_slug
     return nil if achievement_name.blank?
     "mission_#{slug}_completed"
+  end
+
+  # SVGs can't be resized and resizing a GIF drops its animation, so those
+  # are served as uploaded.
+  def icon_thumb
+    return icon unless icon.variable? && icon.content_type != "image/gif"
+
+    icon.variant(:thumb)
   end
 
   def default_guide
@@ -297,12 +324,27 @@ class Mission < ApplicationRecord
     submission_guide.to_s.split(/\r?\n/)
   end
 
+  # A bullet's text can wrap onto a following line or two (pasted from
+  # somewhere hard-wrapped, or just a long requirement) with no blank line
+  # before it — that continuation has no "- " of its own, so fold it back
+  # into the bullet it follows rather than losing it or letting it get
+  # mistaken for the outro. A blank line before the trailing text is what
+  # marks it as a genuine outro paragraph instead.
   def submission_criteria
-    submission_guide_lines.filter_map do |line|
+    lines = submission_guide_lines
+    last_bullet = lines.rindex { |l| l.strip.start_with?("- ", "* ") }
+    return [] unless last_bullet
+
+    criteria = []
+    lines[0...criteria_end_index(lines, last_bullet)].each do |line|
       stripped = line.strip
-      next unless stripped.start_with?("- ", "* ")
-      stripped.sub(/^[\-\*]\s+/, "").presence
+      if stripped.start_with?("- ", "* ")
+        criteria << stripped.sub(/^[\-\*]\s+/, "")
+      elsif criteria.any? && stripped.present?
+        criteria[-1] = "#{criteria[-1]} #{stripped}"
+      end
     end
+    criteria
   end
 
   def submission_guide_intro
@@ -314,9 +356,9 @@ class Mission < ApplicationRecord
   def submission_guide_outro
     return nil if submission_guide.blank?
     lines = submission_guide_lines
-    first_bullet = lines.find_index { |l| l.strip.start_with?("- ", "* ") }
-    return nil unless first_bullet
-    after = lines[first_bullet..].drop_while { |l| l.strip.start_with?("- ", "* ") || l.strip.empty? }
+    last_bullet = lines.rindex { |l| l.strip.start_with?("- ", "* ") }
+    return nil unless last_bullet
+    after = lines[criteria_end_index(lines, last_bullet)..].drop_while(&:blank?)
     after.join("\n").strip.presence
   end
 
@@ -354,6 +396,7 @@ class Mission < ApplicationRecord
       .or(Project.where(deleted_at: nil, id: shipped_ids))
       .joins("LEFT JOIN (#{devlog_likes.to_sql}) mission_devlog_likes ON mission_devlog_likes.project_id = projects.id")
       .left_joins(:project_follows, :banner_attachment)
+      .includes(mission_attachments: :mission)
       .group("projects.id", "mission_devlog_likes.devlog_likes_count", "active_storage_attachments.id")
       .order(Arel.sql(<<~SQL))
         (active_storage_attachments.id IS NULL) ASC,
@@ -373,5 +416,20 @@ class Mission < ApplicationRecord
       .joins(ship_event: :post)
       .distinct
       .pluck("posts.project_id")
+  end
+
+  private
+
+  # First line after the last bullet where a blank line breaks the run —
+  # everything before it is still the bullet's own wrapped continuation,
+  # everything from it onward is the outro.
+  def criteria_end_index(lines, last_bullet)
+    idx = last_bullet + 1
+    idx += 1 while idx < lines.length && lines[idx].strip.present?
+    idx
+  end
+
+  def migrate_attached_projects_to_hardware
+    Mission::MigrateProjectsToHardwareJob.perform_later(id, PaperTrail.request.whodunnit)
   end
 end
