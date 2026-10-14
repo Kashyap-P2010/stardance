@@ -91,6 +91,14 @@ class Projects::DevlogsController < ApplicationController
       return render :edit, status: :unprocessable_entity
     end
 
+    # Reject bad uploads before purging anything they were meant to replace,
+    # otherwise a too-large file leaves the devlog with no attachments.
+    attachment_errors = new_attachment_errors(new_attachments)
+    if attachment_errors.any?
+      flash.now[:alert] = attachment_errors.to_sentence
+      return render :edit, status: :unprocessable_entity
+    end
+
     if attachment_ids_to_remove.any?
       attachments_to_remove.each(&:purge_later)
     end
@@ -237,6 +245,16 @@ class Projects::DevlogsController < ApplicationController
 
   def update_devlog_params
     params.require(:post_devlog).permit(:body, attachments: [])
+  end
+
+  # Runs the model's attachment validations (size, type, processable) on an
+  # unsaved devlog so nothing is uploaded or attached.
+  def new_attachment_errors(files)
+    return [] if files.empty?
+
+    probe = Post::Devlog.new(attachments: files)
+    probe.validate
+    probe.errors.full_messages_for(:attachments)
   end
 
   def load_preview_time

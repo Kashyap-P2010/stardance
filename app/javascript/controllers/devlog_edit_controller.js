@@ -12,7 +12,8 @@ export default class extends Controller {
     const file = target.files[0];
     if (!file) return;
 
-    removeFlag.disabled = false;
+    // The add slot on a devlog with no attachments has nothing to remove.
+    if (removeFlag) removeFlag.disabled = false;
 
     const url = URL.createObjectURL(file);
     if (file.type.startsWith("video/")) {
@@ -23,6 +24,6 @@ export default class extends Controller {
 
     slot.classList.add("devlog-edit__attachment--replaced");
     const label = slot.querySelector(".devlog-edit__attachment-replace-label");
-    if (label) label.textContent = "Replaced";
+    if (label) label.textContent = removeFlag ? "Replaced" : "Added";
   }
 }

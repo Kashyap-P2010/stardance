@@ -99,7 +99,9 @@ class Post::Devlog < ApplicationRecord
             content_type: { in: ACCEPTED_CONTENT_TYPES, spoofing_protection: true },
             size: { less_than: ATTACHMENT_MAX_SIZE, message: "is too large (max 50 MB)" },
             processable_file: true
-  validate :at_least_one_attachment
+  # Skipped when soft-deleting so a devlog that lost its attachments can
+  # still be deleted.
+  validate :at_least_one_attachment, unless: :will_save_change_to_deleted_at?
   validate :at_most_max_attachments
   validates :duration_seconds,
             numericality: {
