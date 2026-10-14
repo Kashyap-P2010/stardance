@@ -1,5 +1,6 @@
 class VotesController < ApplicationController
   include VoteTrackable
+  include TimelinePostPreloading
 
   def new
     authorize Vote
@@ -116,11 +117,12 @@ class VotesController < ApplicationController
       return unless assigned_ship_post
 
       @timeline_posts = @project.posts
-        .includes(postable: { attachments_attachments: :blob })
+        .preload(:postable)
         .where("posts.created_at <= ?", assigned_ship_post.created_at)
         .order(created_at: :desc)
         .select { |post| post.postable.present? }
         .reject { |post| post.postable_type == "Post::ShipEvent" && post.postable.certification_status.in?(Post::ShipEvent::HIDDEN_STATUSES) }
+      preload_timeline_postables(@timeline_posts, project_context: true)
     end
 
     def vote_params
