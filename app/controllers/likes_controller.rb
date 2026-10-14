@@ -39,7 +39,7 @@ class LikesController < ApplicationController
 
   def set_likeable
     if params[:devlog_id].present?
-      @likeable = Post::Devlog.find(params[:devlog_id])
+      @likeable = Post::Devlog.visible_to(current_user).find(params[:devlog_id])
     else
       raise ActiveRecord::RecordNotFound, "Likeable not found"
     end

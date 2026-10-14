@@ -39,6 +39,13 @@ class Post::Devlog < ApplicationRecord
   scope :design_phase, -> { where(phase: "design") }
   scope :build_phase, -> { where(phase: "build") }
 
+  # Devlogs whose Post the viewer may see (see Post.visible_to). The flat
+  # /devlogs/:devlog_id like and comment routes look devlogs up through this,
+  # so a devlog by an author without ID verification can't be reached by id.
+  scope :visible_to, ->(viewer) {
+    where(id: Post.visible_to(viewer).where(postable_type: "Post::Devlog").select(:postable_id))
+  }
+
   BODY_MAX_LENGTH = 4_000
   MAX_ATTACHMENTS = 4
   ATTACHMENT_MAX_SIZE = 50.megabytes
