@@ -616,8 +616,11 @@ class Project < ApplicationRecord
   # Deduplicated because every member of a hardware project gets their own
   # User::HackatimeProject row under the same name, and callers treat this as a
   # set: it's joined into the Airtable sync and the devlog key snapshot, and
-  # rendered as-is on the integrity dashboard.
+  # rendered as-is on the integrity dashboard. Uses the preloaded rows when the
+  # caller already loaded them (the home composer renders one chip per project).
   def hackatime_keys
+    return hackatime_projects.map(&:name).uniq if hackatime_projects.loaded?
+
     hackatime_projects.distinct.pluck(:name)
   end
 

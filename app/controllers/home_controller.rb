@@ -22,7 +22,7 @@ class HomeController < ApplicationController
 
   def load_composer
     @devlog = Post::Devlog.new
-    @composer_projects = current_user.projects.order(updated_at: :desc)
+    @composer_projects = current_user.projects.includes(:hackatime_projects).order(updated_at: :desc)
     @selected_project = selected_composer_project
   end
 
