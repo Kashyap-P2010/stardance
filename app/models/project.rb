@@ -636,21 +636,43 @@ class Project < ApplicationRecord
     (total_seconds / 3600.0).round(1)
   end
 
+  # Keys whose windows open at the same moment share one Hackatime call; a key
+  # linked after the last devlog has its own, earlier window.
   def seconds_coded_in_devlog_window(hackatime_uid, at: Time.current, access_token: nil)
-    HackatimeService.fetch_total_seconds_for_projects(
-      hackatime_uid,
-      hackatime_keys,
-      start_date: devlog_window_start(at).iso8601,
-      end_date: at.iso8601,
-      access_token: access_token
-    )
+    hackatime_keys.group_by { |key| devlog_window_start(at, key: key) }.sum do |window_start, keys|
+      seconds = HackatimeService.fetch_total_seconds_for_projects(
+        hackatime_uid,
+        keys,
+        start_date: window_start.iso8601,
+        end_date: at.iso8601,
+        access_token: access_token
+      )
+      return nil if seconds.nil?
+
+      seconds
+    end
   end
 
   # Where the current devlog window opened: the previous devlog, or for the
-  # first devlog the earlier of project creation and season start.
-  def devlog_window_start(at)
-    previous_devlog = devlogs.where("post_devlogs.created_at < ?", at).order("post_devlogs.created_at desc").first
+  # first devlog the earlier of project creation and season start. With a key,
+  # only devlogs that already counted that key close its window, so a Hackatime
+  # project linked after earlier devlogs still gets its earlier time (#775).
+  # Devlogs without a key list (test time, journal import) close every key's
+  # window, as before.
+  def devlog_window_start(at, key: nil)
+    previous_devlogs = devlogs.where("post_devlogs.created_at < ?", at).order("post_devlogs.created_at desc")
+    previous_devlog = if key
+      known_names = User::HackatimeProject.snapshot_candidates_for(id).distinct.pluck(:name)
+      previous_devlogs.find { |devlog| devlog_covers_key?(devlog, key, known_names: known_names) }
+    else
+      previous_devlogs.first
+    end
     previous_devlog&.created_at || [ created_at, Date.parse(HackatimeService::START_DATE).beginning_of_day ].min
+  end
+
+  # The earliest window any linked key is still open from.
+  def earliest_devlog_window_start(at)
+    hackatime_keys.map { |key| devlog_window_start(at, key: key) }.min || devlog_window_start(at)
   end
 
   aasm column: :ship_status do
@@ -1100,6 +1122,16 @@ class Project < ApplicationRecord
   end
 
   private
+
+  # A devlog with no key list (test time, journal import) covers every key. A
+  # legacy CSV snapshot that can't be split unambiguously (#1426) falls back to
+  # matching the key as a comma-bounded run.
+  def devlog_covers_key?(devlog, key, known_names:)
+    names = devlog.hackatime_project_names(known_names: known_names)
+    return names.empty? || names.include?(key) unless names.nil?
+
+    ",#{devlog.hackatime_projects_key_snapshot},".include?(",#{key},")
+  end
 
   # Whether every shipping requirement in `keys` currently passes. Shared by
   # #info_complete? (all info keys) and #funding_info_complete? (info minus demo).

@@ -208,14 +208,14 @@ class Post::Devlog < ApplicationRecord
     project = post.project
     return [] unless project
 
-    window_start = project.devlog_window_start(created_at)
-    cache_key = [ "devlog_hackatime_breakdown/v2", id, keys.to_json, window_start, created_at, hackatime_pulled_at ]
+    window_starts = keys.index_with { |key| project.devlog_window_start(created_at, key: key) }
+    cache_key = [ "devlog_hackatime_breakdown/v3", id, keys.to_json, window_starts.values, created_at, hackatime_pulled_at ]
     Rails.cache.fetch(cache_key, expires_in: 30.days) do
       access_token = author.hackatime_identity&.access_token
 
       breakdown = keys.map do |key|
         seconds = HackatimeService.fetch_total_seconds_for_projects(
-          hackatime_uid, [ key ], start_date: window_start.iso8601, end_date: created_at.iso8601, access_token: access_token
+          hackatime_uid, [ key ], start_date: window_starts[key].iso8601, end_date: created_at.iso8601, access_token: access_token
         )
         return [] if seconds.nil?
 
