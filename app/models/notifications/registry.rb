@@ -25,6 +25,7 @@ module Notifications
       Notifications::Payouts::VoteDeficitBlocked
       Notifications::Votes::Discarded
       Notifications::ShopOrders::StatusChanged
+      Notifications::ShopOrders::TrackingUpdated
       Notifications::Hardware::FundingRequestReviewed
       Notifications::Hardware::BuildReviewed
       Notifications::Hardware::PermanentlyRejected

@@ -130,6 +130,7 @@
 #         release_from_hold_admin_shop_order POST   /admin/shop/orders/:id/release_from_hold(.:format)                                                admin/shop/orders#release_from_hold
 #            mark_fulfilled_admin_shop_order POST   /admin/shop/orders/:id/mark_fulfilled(.:format)                                                   admin/shop/orders#mark_fulfilled
 #     update_internal_notes_admin_shop_order POST   /admin/shop/orders/:id/update_internal_notes(.:format)                                            admin/shop/orders#update_internal_notes
+#           update_tracking_admin_shop_order POST   /admin/shop/orders/:id/update_tracking(.:format)                                                  admin/shop/orders#update_tracking
 #               assign_user_admin_shop_order POST   /admin/shop/orders/:id/assign_user(.:format)                                                      admin/shop/orders#assign_user
 #          cancel_hcb_grant_admin_shop_order POST   /admin/shop/orders/:id/cancel_hcb_grant(.:format)                                                 admin/shop/orders#cancel_hcb_grant
 #      refresh_verification_admin_shop_order POST   /admin/shop/orders/:id/refresh_verification(.:format)                                             admin/shop/orders#refresh_verification
@@ -835,6 +836,7 @@ Rails.application.routes.draw do
           post :release_from_hold
           post :mark_fulfilled
           post :update_internal_notes
+          post :update_tracking
           post :assign_user
           post :cancel_hcb_grant
           post :refresh_verification

@@ -147,9 +147,14 @@ class ShopOrder < ApplicationRecord
   before_validation :set_country_from_address, on: :create
   before_validation :freeze_item_price, on: :create
   after_commit :notify_user_of_status_change, if: :saved_change_to_aasm_state?
+  after_commit :notify_user_of_tracking_update, if: :tracking_number_newly_set?
   after_commit :schedule_hold_release, if: :placed_on_hold?
 
   HOLD_DURATION = 7.days
+
+  # The status DMs for these states already show the tracking number, so one
+  # saved alongside such a transition doesn't need a DM of its own.
+  STATES_SHOWING_TRACKING = %w[awaiting_periodical_fulfillment fulfilled].freeze
 
   scope :expired_holds, ->(now = Time.current) {
     cutoff = now - HOLD_DURATION
@@ -324,6 +329,10 @@ class ShopOrder < ApplicationRecord
 
   def grant?
     shop_item.is_a?(ShopItem::HCBGrant) || shop_item.is_a?(ShopItem::HCBPreauthGrant)
+  end
+
+  def tracking_link
+    TrackingLink.for(tracking_number)
   end
 
   def topup_url
@@ -520,6 +529,20 @@ class ShopOrder < ApplicationRecord
   end
 
   private
+
+  def tracking_number_newly_set?
+    return false unless saved_change_to_tracking_number? && tracking_number.present?
+
+    !(saved_change_to_aasm_state? && aasm_state.in?(STATES_SHOWING_TRACKING))
+  end
+
+  def notify_user_of_tracking_update
+    Notifications::ShopOrders::TrackingUpdated.notify(
+      recipient: user,
+      record: self,
+      params: { "tracking_number" => tracking_number }
+    )
+  end
 
   def placed_on_hold?
     saved_change_to_aasm_state? && on_hold?

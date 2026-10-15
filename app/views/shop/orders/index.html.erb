@@ -66,7 +66,7 @@
                   </span>
                   <% if order.aasm_state == "fulfilled" %>
                     <% if not order.digital? %>
-                      <span class="my-orders__status-hint">We have ordered/shipped the item to you! This does not mean it has already reached you.<% if order.external_ref.present? %> You can track the package here: <% if order.external_ref.start_with?("pkg!", "ltr!") %><a href="https://mail.hackclub.com/<%= order.external_ref %>" target="_blank" rel="noopener"><%= order.external_ref %></a><% else %><%= order.external_ref %><% end %><% end %></span>
+                      <span class="my-orders__status-hint">We have ordered/shipped the item to you! This does not mean it has already reached you.<% if order.external_ref.present? %> You can track the package here: <%= tracking_link_tag(order.external_ref) %><% end %></span>
                     <% elsif order.grant? && order.shop_card_grant.present? %>
                       <div class="my-orders__grant-actions">
                         <%= render ActionButtonComponent.new(text: "Open Grant", href: order.shop_card_grant.hcb_url, size: :large, variant: :primary, target: "_blank") %>
@@ -76,6 +76,9 @@
                     <% end %>
                   <% elsif order.aasm_state == "rejected" && order.rejection_reason.present? %>
                     <span class="my-orders__status-hint my-orders__status-hint--danger"><%= order.rejection_reason %></span>
+                  <% end %>
+                  <% if order.tracking_number.present? %>
+                    <span class="my-orders__status-hint my-orders__status-hint--tracking">Tracking: <%= tracking_link_tag(order.tracking_number) %></span>
                   <% end %>
                 </div>
               </div>

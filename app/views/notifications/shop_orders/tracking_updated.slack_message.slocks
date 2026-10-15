@@ -1,0 +1,17 @@
+item = order.shop_item.name
+
+header "📦 Your #{item} is on its way!"
+
+section "Good news! Your *#{item}* is making its way to you. Here's your tracking: #{TrackingLink.for(tracking_number).to_slack_mrkdwn}", markdown: true
+
+section "Order Details:",
+  fields: [
+    mrkdwn_text("*Order ID:* #{order.id}"),
+    mrkdwn_text("*Quantity:* #{order.quantity}"),
+  ]
+
+divider
+
+context [
+  mrkdwn_text("Tracking can take a day or so to start moving. Once it arrives, we'd love to see it in <#C07UMRYJ1LH>! 🚀")
+]
