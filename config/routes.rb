@@ -623,6 +623,7 @@ Rails.application.routes.draw do
     end
     resources :dismissals, only: [ :create ]
     resources :reports, only: [ :index ]
+    resources :ratings, only: [ :index ], controller: "votes"
     post "verification/refresh", to: "verifications#refresh", as: :verification_refresh
     post "dev/pretend_idv", to: "dev_tools#pretend_idv", as: :pretend_idv_dev
     resources :notifications, only: [ :index ] do

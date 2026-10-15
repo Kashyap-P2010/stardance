@@ -43,4 +43,18 @@ class Admin::AuditLogsFilterTest < ActionDispatch::IntegrationTest
 
     assert_select "input[data-searchable-select-target=input][value=?]", @admin.display_name
   end
+
+  test "a record's view all link includes changes made by the system" do
+    project = projects(:one)
+    11.times { |i| project.update!(title: "System rename #{i}") }
+
+    sign_in @admin
+
+    full_log_path = admin_audit_logs_path(item_type: "Project", item_id: project.id, show_system: "1")
+    get admin_project_path(project)
+    assert_select "a.audit-log__view-all[href=?]", full_log_path
+
+    get full_log_path
+    assert_select ".audit-log__row .audit-log__system", text: "System", minimum: 11
+  end
 end

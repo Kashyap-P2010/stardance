@@ -87,7 +87,7 @@ class UsersController < ApplicationController
 
   def profile_projects
     @user.projects
-         .includes(:users, banner_attachment: :blob, mission_attachments: { mission: { banner_attachment: :blob } })
+         .includes(:users, banner_attachment: :blob, mission_attachments: { mission: [ { banner_attachment: :blob }, { icon_attachment: :blob } ] })
          .order(created_at: :desc)
   end
 
@@ -113,6 +113,7 @@ class UsersController < ApplicationController
       preload_timeline_postables(posts)
       posts = posts.select { |post| !post.repost? || post.visible_repost_original_for?(current_user) }
       @reposted_post_ids = reposted_post_ids_for(posts)
+      @liked_devlog_ids = liked_devlog_ids_for(posts)
       posts
     }
 

@@ -394,15 +394,6 @@ class Home::FeedsController < ApplicationController
     ActiveRecord::Associations::Preloader.new(records: records, associations: associations).call
   end
 
-  def liked_devlog_ids_for(posts)
-    return Set.new unless current_user
-
-    devlog_posts = posts.select { |p| p.postable_type == "Post::Devlog" }
-    return Set.new if devlog_posts.empty?
-
-    Like.where(user: current_user, likeable_type: "Post::Devlog", likeable_id: devlog_posts.map(&:postable_id)).pluck(:likeable_id).to_set
-  end
-
   def load_recommended_projects
     projects = recommendations.projects(limit: 6)
 

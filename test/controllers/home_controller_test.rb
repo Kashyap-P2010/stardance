@@ -23,6 +23,26 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
     assert_select "turbo-frame#home_feed[src=?]", home_feed_path
   end
 
+  test "composer chips read hackatime keys from preloaded rows instead of one query per project" do
+    linked = 3.times.map do |i|
+      project = Project.create!(title: "Linked project #{i}")
+      project.memberships.create!(user: @user, role: :owner)
+      User::HackatimeProject.create!(user: @user, project: project, name: "linked-#{i}")
+      project
+    end
+    sign_in @user
+
+    assert_queries_match(/SELECT DISTINCT "user_hackatime_projects"\."name"/, count: 0) do
+      get home_path
+    end
+
+    assert_response :success
+    linked.each do |project|
+      assert_select ".feed-composer__chip[data-composer-hackatime-linked-param='true']", text: project.title
+    end
+    assert_select ".feed-composer__chip[data-composer-hackatime-linked-param='false']", text: @project.title
+  end
+
   test "the ended GPU raffle no longer appears in the home rail, even for participants" do
     @user.raffle_participant || Raffle::Participant.find_or_enroll!(@user)
     sign_in @user
