@@ -92,7 +92,7 @@ Pictures of your project:
 ### And lastly, you do _not_ have:
 
 - [ ] AI Generated READMEs
-- [ ] Work that is not your own / copied from tutorials or other proejcts
+- [ ] Work that is not your own / copied from tutorials or other projects
 - [ ] missing firmware/software
 
 ### Note on builds:
