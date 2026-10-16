@@ -47,8 +47,6 @@ class Post::ShipEvent < ApplicationRecord
   include Postable
   include Ledgerable
   include Post::ShipEvent::Payouts
-  include SemanticSearchIndexable
-  semantic_search_indexable type: "ship"
 
   VOTES_REQUIRED_FOR_PAYOUT = 12
   VOTES_TO_LEAVE_POOL = VOTES_REQUIRED_FOR_PAYOUT
