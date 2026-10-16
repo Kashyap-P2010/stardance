@@ -398,7 +398,7 @@
           </div>
         <% end %>
 
-        <% if shop_item.type.in?(%w[ShopItem::HackClubberItem ShopItem::ThirdPartyDigital ShopItem::HQMailItem]) %>
+        <% if shop_item.type.in?(ShopHelper::ITEMS_WITH_CONFIGURABLE_SOURCE_REGION) %>
           <div class="card">
             <h3>Source Region</h3>
             <div class="shop-item-form__field">
