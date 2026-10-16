@@ -689,6 +689,16 @@
       flex: 1;
       min-width: 0;
     }
+
+    &--block {
+      display: block;
+      width: 100%;
+      margin-top: var(--space-xxxs);
+    }
+  }
+
+  &__dialog-label {
+    font-size: var(--font-size-s);
   }
 
   &__textarea {
