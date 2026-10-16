@@ -614,16 +614,7 @@ class Admin::Shop::OrdersController < Admin::ApplicationController
   def update_tracking
     authorize @order, :update_tracking?
 
-    if @order.update(tracking_number: params[:tracking_number].to_s.strip.presence)
-      if @order.saved_change_to_tracking_number?
-        ::PaperTrail::Version.create!(
-          item_type: "ShopOrder",
-          item_id: @order.id,
-          event: "tracking_updated",
-          whodunnit: current_user.id,
-          object_changes: { tracking_number: @order.saved_change_to_tracking_number }
-        )
-      end
+    if @order.update_tracking(params[:tracking_number], by: current_user)
       redirect_to admin_shop_order_path(@order), notice: @order.tracking_number ? "Tracking updated" : "Tracking cleared"
     else
       redirect_to admin_shop_order_path(@order), alert: "Failed to update tracking: #{@order.errors.full_messages.join(', ')}"

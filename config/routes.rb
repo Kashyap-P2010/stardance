@@ -480,6 +480,9 @@ Rails.application.routes.draw do
         end
         resources :balance_adjustments, only: [ :create ]
       end
+
+      # Fulfilment staff endpoints for looking up orders and setting tracking.
+      resources :shop_orders, only: [ :index, :show, :update ]
     end
     namespace :slack do
       post "events", to: "events#create"

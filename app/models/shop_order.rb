@@ -335,6 +335,24 @@ class ShopOrder < ApplicationRecord
     TrackingLink.for(tracking_number)
   end
 
+  # Sets (or clears, when blank) the carrier tracking and audit logs the
+  # change as `tracking_updated` against `by`. The buyer's DM comes from the
+  # after_commit hook. Shared by the admin order page and the API.
+  def update_tracking(code, by:)
+    return false unless update(tracking_number: code.to_s.strip.presence)
+
+    if saved_change_to_tracking_number?
+      PaperTrail::Version.create!(
+        item_type: "ShopOrder",
+        item_id: id,
+        event: "tracking_updated",
+        whodunnit: by.id,
+        object_changes: { tracking_number: saved_change_to_tracking_number }
+      )
+    end
+    true
+  end
+
   def topup_url
     return nil unless grant?
 
