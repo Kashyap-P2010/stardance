@@ -136,7 +136,7 @@ class Admin::Shop::OrdersControllerTrackingTest < ActionDispatch::IntegrationTes
     assert_select "form.aorder__tracking-form input[name=tracking_number][value=?]", USPS
   end
 
-  test "the tracking DM renders the tracking as a carrier link" do
+  test "the tracking DM links \"here\" to the tracking" do
     @order.update_columns(tracking_number: USPS)
     notification = Notifications::ShopOrders::TrackingUpdated.notify(
       recipient: @buyer, record: @order, params: { "tracking_number" => USPS }
@@ -149,8 +149,10 @@ class Admin::Shop::OrdersControllerTrackingTest < ActionDispatch::IntegrationTes
     )
     texts = JSON.parse(rendered)["blocks"].filter_map { |block| block.dig("text", "text") }
 
-    assert_includes texts, "📦 Your Tracked Patch is on its way!"
-    assert texts.any? { |text| text.include?("<#{USPS_URL}|#{USPS}>") }, "expected the tracking to be a carrier link"
+    assert_equal [
+      "hi! your Tracked Patch from stardance is on the way! you can track it <#{USPS_URL}|here> :)",
+      "if there's any issues with anything please send a message in <#C0AP0NMSP3P> and you can show it off when it arrives in <#C07UMRYJ1LH>!"
+    ], texts
   end
 
   test "the fulfilled DM links tracking, falling back to external_ref" do

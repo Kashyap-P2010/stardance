@@ -1,17 +1,6 @@
-item = order.shop_item.name
+tracking = TrackingLink.for(tracking_number)
+track_it = tracking.url ? "<#{tracking.url}|here>" : "with #{tracking.to_slack_mrkdwn}"
 
-header "📦 Your #{item} is on its way!"
+section "hi! your #{order.shop_item.name} from stardance is on the way! you can track it #{track_it} :)", markdown: true
 
-section "Good news! Your *#{item}* is making its way to you. Here's your tracking: #{TrackingLink.for(tracking_number).to_slack_mrkdwn}", markdown: true
-
-section "Order Details:",
-  fields: [
-    mrkdwn_text("*Order ID:* #{order.id}"),
-    mrkdwn_text("*Quantity:* #{order.quantity}"),
-  ]
-
-divider
-
-context [
-  mrkdwn_text("Tracking can take a day or so to start moving. Once it arrives, we'd love to see it in <#C07UMRYJ1LH>! 🚀")
-]
+section "if there's any issues with anything please send a message in <#C0AP0NMSP3P> and you can show it off when it arrives in <#C07UMRYJ1LH>!", markdown: true
