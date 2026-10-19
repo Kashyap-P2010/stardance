@@ -1,4 +1,4 @@
-<% if current_user&.onboarded? && !current_user.has_dismissed?(PollVote::DISMISS_THING) %>
+<% if current_user&.onboarded? && Flipper.enabled?(:"justin-melena", current_user) && !current_user.has_dismissed?(PollVote::DISMISS_THING) %>
   <div data-controller="sticker-promo" data-sticker-promo-key-value="<%= PollVote::DISMISS_THING %>">
     <dialog class="poll-popup" data-sticker-promo-target="dialog" data-action="cancel->sticker-promo#dismiss">
       <div class="poll-popup__content">

@@ -1,6 +1,8 @@
 require "test_helper"
 
 class Admin::BukuX3EventsControllerTest < ActionDispatch::IntegrationTest
+  teardown { Flipper.disable(:"justin-melena") }
+
   setup do
     @admin = users(:tongyu)
     @event = BukuX3::Event.create!(key: BukuX3::Event::KEY, unlocked_at: 1.day.ago,
@@ -163,6 +165,7 @@ class Admin::BukuX3EventsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "jim takeover shows live poll totals and recent votes without counting voters as dismissals" do
+    Flipper.enable(:"justin-melena")
     travel_to Time.zone.local(2026, 10, 19, 12) do
       PollVote.delete_all
       now = Time.current
@@ -195,6 +198,7 @@ class Admin::BukuX3EventsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "jim takeover handles a poll with no votes" do
+    Flipper.enable(:"justin-melena")
     PollVote.delete_all
     sign_in @admin
 

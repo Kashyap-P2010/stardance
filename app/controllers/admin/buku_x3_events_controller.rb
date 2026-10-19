@@ -6,10 +6,12 @@ class Admin::BukuX3EventsController < Admin::ApplicationController
     @buku_daily_shippers = @buku_event.daily_active_shippers.reverse
     @crescent_clicks = crescent_promo_clicks
     @mipmap_clicks = mipmap_promo_clicks
-    @poll_tally = PollVote.tally
-    @poll_recent_votes = PollVote.where(created_at: 24.hours.ago..Time.current).count
-    @poll_dismissed_without_voting = User.where("? = ANY(things_dismissed)", PollVote::DISMISS_THING)
-      .where.not(id: PollVote.select(:user_id)).count
+    if Flipper.enabled?(:"justin-melena", current_user)
+      @poll_tally = PollVote.tally
+      @poll_recent_votes = PollVote.where(created_at: 24.hours.ago..Time.current).count
+      @poll_dismissed_without_voting = User.where("? = ANY(things_dismissed)", PollVote::DISMISS_THING)
+        .where.not(id: PollVote.select(:user_id)).count
+    end
   end
 
   def update

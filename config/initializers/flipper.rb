@@ -46,6 +46,7 @@ Rails.application.config.after_initialize do
         wrong_tool_promo
         forge-promo
         terra-promo
+        justin-melena
       ].each { |flag| Flipper.add(flag) }
       Flipper.add(:bukux2_preview_complete) if Rails.env.development?
 
