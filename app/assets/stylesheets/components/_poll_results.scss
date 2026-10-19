@@ -54,6 +54,12 @@
     opacity: 0.8;
   }
 
+  &__tagline {
+    margin-left: auto;
+    font-family: "Playfair Display", Georgia, serif;
+    font-style: italic;
+  }
+
   &__live-dot {
     width: 0.5rem;
     height: 0.5rem;

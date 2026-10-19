@@ -10,5 +10,7 @@
       <progress class="poll-results__bar poll-results__bar--<%= choice %>" value="<%= percent %>" max="100"><%= percent %>%</progress>
     </div>
   <% end %>
-  <p class="poll-results__total"><span class="poll-results__live-dot"></span> live · <%= pluralize(total, "vote") %></p>
+  <p class="poll-results__total"><span class="poll-results__live-dot"></span> live · <%= pluralize(total, "vote") %>
+    <em class="poll-results__tagline">who sang it better</em>
+  </p>
 </div>
