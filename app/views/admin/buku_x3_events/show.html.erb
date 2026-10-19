@@ -6,6 +6,25 @@
     <h1>the jim takeover</h1>
   </header>
 
+  <section aria-labelledby="jimberjake-poll-heading">
+    <h2 id="jimberjake-poll-heading">jimberjake poll</h2>
+    <p class="admin-dashboard__metric-note">one vote per account · all-time results update live</p>
+    <%= turbo_stream_from PollVote::STREAM %>
+    <%= render "poll_votes/results", tally: @poll_tally %>
+    <dl class="admin-dashboard__grid">
+      <div class="admin-dashboard__metric">
+        <dt>votes in the last 24 hours</dt>
+        <dd><%= number_with_delimiter(@poll_recent_votes) %></dd>
+      </div>
+      <div class="admin-dashboard__metric">
+        <dt>dismissed without voting</dt>
+        <dd><%= number_with_delimiter(@poll_dismissed_without_voting) %></dd>
+      </div>
+    </dl>
+    <p class="admin-dashboard__metric-note">24-hour votes and dismissals update on refresh · dismissals exclude accounts that have since voted</p>
+    <%= link_to "open live poll results", admin_poll_results_path %>
+  </section>
+
   <section aria-labelledby="buku-discoveries-heading">
     <h2 id="buku-discoveries-heading">roles discovered</h2>
     <p class="admin-dashboard__metric-note">unique accounts that completed their role reveal · previews don't count · updates on refresh</p>
