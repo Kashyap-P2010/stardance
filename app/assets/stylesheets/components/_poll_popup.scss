@@ -92,7 +92,9 @@
     font-weight: 700;
     font-size: clamp(0.875rem, 2vw, 1.125rem);
     cursor: pointer;
-    transition: background 150ms ease, color 150ms ease;
+    transition:
+      background 150ms ease,
+      color 150ms ease;
 
     &:hover {
       background: var(--poll-popup-color);
