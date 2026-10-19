@@ -1,5 +1,6 @@
 /* Import page-specific styles */
 @use "pages/admin/dashboard";
+@use "components/poll_results";
 @use "pages/admin/rating_dashboard";
 @use "pages/admin/mega_dashboard";
 @use "pages/admin/hour_funnel";

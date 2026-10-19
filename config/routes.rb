@@ -437,6 +437,7 @@ Rails.application.routes.draw do
   get "og/:page", to: "og_images#show", as: :og_image, defaults: { format: :png }
   # Landing
   root "landing#index"
+  resources :poll_votes, only: :create
   get "landing/signup_count", to: "landing#signup_count", as: :landing_signup_count
   get "landing/rsvp_count", to: "landing#rsvp_count", as: :landing_rsvp_count
 
@@ -682,6 +683,7 @@ Rails.application.routes.draw do
     root to: "application#index"
     resource :buku_x3_event, only: :update
     get "jim_takeover", to: "buku_x3_events#show", as: :jim_takeover
+    resource :poll_results, only: :show
     post "jim_takeover/bukux2_contributors", to: "buku_x3_events#export_bukux2", as: :bukux2_contributors_export
     get "dashboard/counts/:key", to: "dashboard_counts#show", as: :dashboard_count
 
