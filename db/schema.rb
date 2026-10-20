@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_19_185812) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -1741,6 +1741,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_185812) do
 
   create_table "users", force: :cascade do |t|
     t.string "age_attestation"
+    t.date "aged_out_on"
     t.string "api_key"
     t.integer "approx_balance", default: 0, null: false
     t.integer "approx_total_earned", default: 0, null: false

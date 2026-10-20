@@ -571,6 +571,7 @@
           unposted_seconds = @unposted_seconds.to_i
           enough_time = !no_hackatime_project && (unposted_seconds >= 15 * 60 || @test_time_granted)
           devlog_disabled_message = "Edit this project to add a Hackatime project" if no_hackatime_project
+          devlog_disabled_message ||= "Time coded after you turned 19 doesn't count, so there's no new time to devlog" if current_user&.aged_out? && !enough_time
           # Only call it the primary action when devlogging is actually
           # actionable right now — i.e. you have a Hackatime project AND at
           # least 15m of unposted time. Otherwise it stays secondary.

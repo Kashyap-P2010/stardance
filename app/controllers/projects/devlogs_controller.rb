@@ -29,6 +29,10 @@ class Projects::DevlogsController < ApplicationController
     current_user.with_advisory_lock("devlog_create", timeout_seconds: 10) do
       load_preview_time
       return redirect_to project_path(@project), alert: "Could not calculate your coding time. Please try again." unless @preview_time.present?
+      if current_user.aged_out? && @preview_seconds < 15.minutes
+        return redirect_to project_path(@project),
+                           alert: "Time coded after you turned 19 doesn't count, so there's no new time to devlog. You can still ship this project and spend your stardust."
+      end
 
       @devlog = Post::Devlog.new(devlog_params)
       @devlog.uploading_attachments = devlog_params[:attachments].present?
@@ -267,7 +271,8 @@ class Projects::DevlogsController < ApplicationController
     return apply_test_time_preview if test_time_granted? && hackatime_keys.blank?
     return @preview_time = nil unless hackatime_keys.present?
 
-    seconds = @project.seconds_coded_in_devlog_window(current_user.hackatime_identity&.uid, access_token: current_user.hackatime_identity&.access_token)
+    seconds = @project.seconds_coded_in_devlog_window(current_user.hackatime_identity&.uid, access_token: current_user.hackatime_identity&.access_token,
+                                                     cutoff: current_user.time_logging_cutoff)
     return apply_test_time_preview if test_time_granted? && seconds.nil?
 
     if seconds.nil?

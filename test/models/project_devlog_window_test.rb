@@ -62,6 +62,23 @@ class ProjectDevlogWindowTest < ActiveSupport::TestCase
     assert_equal test_devlog_at.to_i, @project.devlog_window_start(Time.current, key: "second").to_i
   end
 
+  test "a cutoff ends the window early" do
+    cutoff = 1.day.ago
+    end_dates = []
+    stub = ->(_uid, _keys, start_date:, end_date:, access_token:) { end_dates << end_date; 0 }
+    HackatimeService.stub(:fetch_total_seconds_for_projects, stub) do
+      @project.seconds_coded_in_devlog_window("uid", cutoff: cutoff)
+    end
+
+    assert_equal [ cutoff.iso8601 ], end_dates
+  end
+
+  test "a cutoff before the window opened counts nothing without calling hackatime" do
+    HackatimeService.stub(:fetch_total_seconds_for_projects, ->(*) { flunk "should not call hackatime" }) do
+      assert_equal 0, @project.seconds_coded_in_devlog_window("uid", cutoff: 3.days.ago)
+    end
+  end
+
   private
 
   def record_hackatime_calls

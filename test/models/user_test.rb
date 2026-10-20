@@ -4,6 +4,7 @@
 #
 #  id                               :bigint           not null, primary key
 #  age_attestation                  :string
+#  aged_out_on                      :date
 #  api_key                          :string
 #  approx_balance                   :integer          default(0), not null
 #  approx_total_earned              :integer          default(0), not null

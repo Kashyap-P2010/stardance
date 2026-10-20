@@ -72,11 +72,15 @@ module Project::HackatimeDevlogResync
 
     def hackatime_seconds_for_devlog(devlog, post, keys)
       if identity = post.user&.hackatime_identity
+        window_start = devlog_window_start(devlog.created_at)
+        window_end = [ devlog.created_at, post.user.time_logging_cutoff ].compact.min
+        return 0 if window_start >= window_end
+
         HackatimeService.fetch_total_seconds_for_projects(
           identity.uid,
           keys,
-          start_date: devlog_window_start(devlog.created_at).iso8601,
-          end_date: devlog.created_at.iso8601,
+          start_date: window_start.iso8601,
+          end_date: window_end.iso8601,
           access_token: identity.access_token
         )
       end

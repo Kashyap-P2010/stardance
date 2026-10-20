@@ -638,13 +638,18 @@ class Project < ApplicationRecord
 
   # Keys whose windows open at the same moment share one Hackatime call; a key
   # linked after the last devlog has its own, earlier window.
-  def seconds_coded_in_devlog_window(hackatime_uid, at: Time.current, access_token: nil)
+  # `cutoff` (User#time_logging_cutoff) closes every window early, so time
+  # coded after it never counts.
+  def seconds_coded_in_devlog_window(hackatime_uid, at: Time.current, access_token: nil, cutoff: nil)
+    window_end = [ at, cutoff ].compact.min
     hackatime_keys.group_by { |key| devlog_window_start(at, key: key) }.sum do |window_start, keys|
+      next 0 if window_start >= window_end
+
       seconds = HackatimeService.fetch_total_seconds_for_projects(
         hackatime_uid,
         keys,
         start_date: window_start.iso8601,
-        end_date: at.iso8601,
+        end_date: window_end.iso8601,
         access_token: access_token
       )
       return nil if seconds.nil?
