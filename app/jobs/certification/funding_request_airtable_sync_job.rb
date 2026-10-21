@@ -82,7 +82,7 @@ module Certification
         "Screenshot" => screenshot_attachments,
 
         # Review Data
-        "reviewer" => @funding_request.reviewer&.display_name || @funding_request.reviewer&.email || "Unknown",
+        "reviewer" => reviewer_name(@funding_request),
         "ship_certifier" => nil,
         "reviewed_at" => @funding_request.decided_at&.iso8601,
         "ship_certed_at" => nil,
@@ -132,7 +132,7 @@ module Certification
 
       case mission_slug
       when "blare"
-        "BLARE_MISSION"
+        build_blare_justification
       when "hackpad"
         build_hackpad_justification
       else
@@ -144,8 +144,6 @@ module Certification
       project = @funding_request.project
       submitted_at = @funding_request.created_at&.strftime("%Y-%m-%d %H:%M UTC")
       total_hours = hours_at_submission || 0
-      requested = @funding_request.requested_amount_cents ? "$#{"%.2f" % (@funding_request.requested_amount_cents / 100.0)}" : "N/A"
-      approved = @funding_request.approved_amount_cents ? "$#{"%.2f" % (@funding_request.approved_amount_cents / 100.0)}" : "N/A"
 
       <<~TEXT.strip
         This is a hardware design submitted to Stardance on #{submitted_at}
@@ -161,11 +159,50 @@ module Certification
         Other data:
 
         Tier: #{@funding_request.tier_code || "N/A"}
-        Requested amount: #{requested}
-        Approved amount: #{approved}
+        Requested amount: #{format_cents(@funding_request.requested_amount_cents)}
+        Approved amount: #{format_cents(@funding_request.approved_amount_cents)}
 
         The Stardance project can be found at https://stardance.hackclub.com/projects/#{project.id}
       TEXT
+    end
+
+    def build_blare_justification
+      project = @funding_request.project
+      submitted_at = @funding_request.created_at&.strftime("%Y-%m-%d %H:%M UTC")
+      approved_at = @funding_request.decided_at&.strftime("%Y-%m-%d %H:%M UTC")
+      total_hours = hours_at_submission || 0
+
+      <<~TEXT.strip
+        This is a hardware design submitted to Stardance on #{submitted_at}
+
+        It was submitted under the blare mission, which gave authors a guide to designing a custom alarm clock. The BLARE mission can be found at https://stardance.hackclub.com/missions/blare
+
+        Authors had to log their hours either through lapse or hackatime, and concurrently post devlogs of their progress. Through this, they logged #{total_hours} hours at the time of submission.
+
+        note that some projects had JOURNAL.md files which were converted into devlogs instead.
+
+        It was then reviewed by the following reviewers:
+
+        #{verdict_history}
+
+        This project was approved by #{reviewer_name(@funding_request)} at #{approved_at}
+
+        Other data:
+
+        Tier: #{@funding_request.tier_code || "N/A"}
+        Requested amount: #{format_cents(@funding_request.requested_amount_cents)}
+        Approved amount: #{format_cents(@funding_request.approved_amount_cents)}
+
+        The Stardance project can be found at https://stardance.hackclub.com/projects/#{project.id}
+      TEXT
+    end
+
+    def format_cents(cents)
+      cents ? "$#{"%.2f" % (cents / 100.0)}" : "N/A"
+    end
+
+    def reviewer_name(request)
+      request.reviewer&.display_name || request.reviewer&.email || "Unknown"
     end
 
     def build_hackpad_justification
@@ -297,9 +334,8 @@ module Certification
         .order(decided_at: :asc)
 
       requests.map do |fr|
-        name = fr.reviewer&.display_name || fr.reviewer&.email || "Unknown"
         at = fr.decided_at.strftime("%Y-%m-%d %H:%M UTC")
-        "#{fr.status.capitalize} by #{name} at #{at}"
+        "#{fr.status.capitalize} by #{reviewer_name(fr)} at #{at}"
       end.join("\n")
     end
 
