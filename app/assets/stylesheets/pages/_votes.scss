@@ -196,6 +196,11 @@
   top: var(--space-m);
   max-height: calc(100dvh - 2 * var(--space-m));
   overflow-y: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 // `.project-show` sets `width: min(100%, 922px); align-self: center;` —
