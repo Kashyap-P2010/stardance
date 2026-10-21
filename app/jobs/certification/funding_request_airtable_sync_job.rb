@@ -22,10 +22,16 @@ module Certification
 
       return unless @funding_request.approved?
 
+      # Airtable is the source of truth: once a record exists it's never
+      # overwritten, so hand edits made there survive a resync.
+      if ::Certification::YswsAirtable.record_for(airtable_review_id)
+        Rails.logger.info "[FundingRequestAirtableSyncJob] Skipping funding_request ##{@funding_request.id}: already in Airtable"
+        return
+      end
+
       Rails.logger.info "[FundingRequestAirtableSyncJob] Starting sync for funding_request ##{@funding_request.id}"
 
-      fields = build_airtable_fields
-      table.upsert(fields, "ship_cert_id")
+      table.create(build_airtable_fields)
 
       @funding_request.update_column(:airtable_synced_at, Time.current)
 
@@ -45,8 +51,8 @@ module Certification
 
       {
         # Identity — prefixed to avoid collisions with YSWS ship_cert_id values
-        "ship_cert_id" => "funding_request_#{@funding_request.id}",
-        "review_id" => "funding_request_#{@funding_request.id}",
+        "ship_cert_id" => airtable_review_id,
+        "review_id" => airtable_review_id,
 
         # User PII
         "user_slack_id" => user_data[:slack_id],
@@ -115,6 +121,10 @@ module Certification
         # Devlogs snapshot
         "devlogs_json" => build_devlogs_json
       }
+    end
+
+    def airtable_review_id
+      "funding_request_#{@funding_request.id}"
     end
 
     def build_justification

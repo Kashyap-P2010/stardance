@@ -86,7 +86,7 @@
               sync_all_to_airtable_admin_certification_funding_requests_path,
               method: :post,
               class: "btn-secondary admin-dashboard__button",
-              data: { turbo_confirm: "This will enqueue all approved funding requests for Airtable sync. Continue?" } %>
+              data: { turbo_confirm: "This will enqueue all approved funding requests for Airtable sync. Requests already in Airtable are skipped. Continue?" } %>
       <% end %>
     </div>
   </section>
