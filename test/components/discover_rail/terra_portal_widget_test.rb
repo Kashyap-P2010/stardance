@@ -5,9 +5,11 @@ class DiscoverRail::TerraPortalWidgetTest < ViewComponent::TestCase
     Flipper.enable(:platform_ads)
     Flipper.enable(:"forge-promo")
     Flipper.enable(:"terra-promo")
+    Flipper.enable(:"mipmap-promo")
   end
 
   teardown do
+    Flipper.disable(:"mipmap-promo")
     Flipper.disable(:"terra-promo")
     Flipper.disable(:"forge-promo")
     Flipper.disable(:platform_ads)

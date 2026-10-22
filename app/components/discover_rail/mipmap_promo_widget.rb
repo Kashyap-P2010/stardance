@@ -5,7 +5,7 @@ module DiscoverRail
     register_as :mipmap_promo
 
     def render?
-      helpers.platform_ads_enabled?(user)
+      helpers.platform_ads_enabled?(user) && Flipper.enabled?(:"mipmap-promo", user)
     end
 
     URL = "https://mipmap.hackclub.com/?utm_source=stardance&utm_medium=discover_rail"
