@@ -25,6 +25,9 @@ application.register("buku-activity-chart", BukuActivityChartController);
 import BukuLeaderboardNameController from "./buku_leaderboard_name_controller";
 application.register("buku-leaderboard-name", BukuLeaderboardNameController);
 
+import BukuLeaderboardPanelController from "./buku_leaderboard_panel_controller";
+application.register("buku-leaderboard-panel", BukuLeaderboardPanelController);
+
 import BulkSelectController from "./bulk_select_controller";
 application.register("bulk-select", BulkSelectController);
 

@@ -1,14 +1,79 @@
 @use "../config/mixins" as *;
 
-// Its own box under the event status box, matching that box's frame.
+// Sits inside the event status box, under the tug row. Hidden until the
+// toggle in the box's bottom-right corner slides it in from the right.
 .buku-leaderboard {
-  margin-bottom: var(--space-l);
-  padding: var(--space-m);
-  border: 2px solid var(--color-set-1-fg-secondary);
-  border-radius: 8px;
-  background: var(--color-set-1-bg);
+  display: flex;
+  flex-direction: column;
+  // Clip the panel while it slides in, without making a scroll container.
+  overflow-x: clip;
   color: var(--color-brand-off-white);
   font-size: var(--font-size-s);
+
+  &__panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xxxs);
+    padding-top: var(--space-xs);
+    border-top: 1px solid
+      color-mix(in srgb, var(--color-set-1-fg-secondary) 50%, transparent);
+    transition:
+      transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+      opacity 320ms ease;
+
+    @starting-style {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+
+    // buku-leaderboard-panel sets this while sliding out, then `hidden`.
+    &[data-closing] {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+
+    &[hidden] {
+      display: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
+    }
+  }
+  &__note {
+    margin: 0 0 var(--space-xxxs);
+    text-align: center;
+    color: var(--color-brand-cream);
+    font-size: var(--font-size-xs);
+    text-wrap: balance;
+  }
+  &__toggle {
+    align-self: flex-end;
+    margin-top: var(--space-xxxs);
+    padding: var(--space-xxxs) var(--space-xs);
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--color-brand-cream);
+    font: inherit;
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--color-brand-off-white);
+    }
+    &:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 1px;
+    }
+  }
+  &__hide,
+  &__toggle[aria-expanded="true"] &__show {
+    display: none;
+  }
+  &__toggle[aria-expanded="true"] &__hide {
+    display: inline;
+  }
 
   &__teams {
     display: grid;

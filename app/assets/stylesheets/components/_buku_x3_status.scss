@@ -1,12 +1,14 @@
+@use "../config/mixins" as *;
+
 .buku-x3-status {
   --buku-team-color: var(--color-set-1-fg-secondary);
 
   position: relative;
   display: grid;
   align-items: center;
-  gap: var(--space-l);
+  gap: var(--space-s);
   margin-bottom: var(--space-l);
-  padding: var(--space-m);
+  padding: var(--space-s) var(--space-m);
   border: 2px solid var(--buku-team-color);
   border-radius: 8px;
   background: var(--color-set-1-bg);
@@ -32,6 +34,63 @@
   &:not(&--compact) &__identity,
   &__damage {
     grid-area: 1 / 1;
+  }
+
+  // The clock takes the first row, so the tug row and the role card that
+  // swaps in over it move down one.
+  &--countdown &__damage,
+  &--countdown:not(&--compact) &__identity {
+    grid-row: 2;
+  }
+
+  &__countdown {
+    // Same width as &__damage, so the clock can match the rope's span.
+    --character-width: clamp(64px, 14cqi, 96px);
+    // "00:00:00:00" in Arc Space is ~5.6em wide with the fixed digit slots,
+    // so dividing the rope's width by a bit more sizes the clock to nearly
+    // span the rope.
+    --clock-width-em: 5.8;
+
+    container-type: inline-size;
+    text-align: center;
+  }
+
+  &__clock {
+    margin: 0;
+    color: var(--color-brand-cream);
+    font-family: "Arc Space", sans-serif;
+    font-size: calc(
+      (100cqi - 1.86 * var(--character-width)) / var(--clock-width-em)
+    );
+    line-height: 1;
+    white-space: nowrap;
+
+    // Arc Space's digits differ in width, so pin each to a "0"-wide slot to
+    // stop the clock shifting every second.
+    span {
+      display: inline-block;
+      width: 1ch;
+      text-align: center;
+    }
+    text-shadow: 0 0 var(--space-s)
+      color-mix(in srgb, var(--color-brand-cream) 45%, transparent);
+
+    // The rope gets too short on phones, so span the whole box instead.
+    @container (max-width: 480px) {
+      font-size: calc(100cqi / var(--clock-width-em));
+    }
+  }
+
+  &__countdown-caption {
+    margin: 0 0 var(--space-xxxs);
+    color: var(--color-brand-cream);
+    font-size: var(--font-size-xs);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  &__countdown-text {
+    @include visually-hidden;
   }
 
   &:not(&--compact) &__identity {
@@ -102,19 +161,15 @@
     flex-shrink: 0;
   }
 
+  // Swaps in over the slim tug row, so it has to fit the same height.
   &:not(&--compact) &__icon {
-    width: clamp(120px, 25%, 180px);
+    width: 64px;
     height: auto;
     aspect-ratio: 10 / 11;
   }
 
   &:not(&--compact) &__role {
-    font-size: var(--font-size-l);
     margin-bottom: var(--space-xxxs);
-  }
-
-  &:not(&--compact) &__reminder {
-    font-size: var(--font-size-m);
   }
 
   &__role,
@@ -135,8 +190,7 @@
     color: var(--color-brand-yellow);
   }
 
-  &__reminder,
-  &__label {
+  &__reminder {
     font-size: var(--font-size-s);
   }
 
@@ -146,32 +200,42 @@
   }
 
   &__label {
-    // Sit just above the rope, clearing the midpoint's dashed overhang.
-    position: absolute;
-    left: calc(var(--character-width) * 0.93);
-    right: calc(var(--character-width) * 0.93);
-    top: calc(var(--character-width) * 0.405 - var(--space-s));
-    z-index: 1;
-    text-align: center;
-    transform: translateY(-100%);
+    color: var(--color-brand-off-white);
   }
 
-  &__note {
-    // Centered under the rope, between the two characters.
+  &__scores {
+    // Team totals hang under the rope's ends, between the two characters.
     position: absolute;
     left: calc(var(--character-width) * 0.93);
     right: calc(var(--character-width) * 0.93);
-    top: calc(var(--character-width) * 0.619 + var(--space-s));
+    top: calc(var(--character-width) * 0.619 + var(--space-xxxs));
     z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-xs);
     margin: 0;
-    text-align: center;
     font-size: var(--font-size-xs);
-    text-wrap: balance;
-    color: var(--color-brand-cream);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  &__score--buku {
+    color: var(--color-brand-lilac);
+  }
+
+  &__score--bean {
+    color: var(--color-brand-yellow);
+  }
+
+  // The characters already say which side is which on narrow screens.
+  @container (max-width: 420px) {
+    &__score-team {
+      display: none;
+    }
   }
 
   &__tug {
-    --character-width: clamp(64px, 24cqi, 160px);
+    --character-width: clamp(64px, 14cqi, 96px);
 
     position: relative;
     isolation: isolate;
@@ -179,22 +243,15 @@
     grid-template-columns: var(--character-width) minmax(0, 1fr) var(
         --character-width
       );
-    margin-top: var(--space-s);
+    margin-top: 0;
   }
 
   &__team {
     position: relative;
     z-index: 1;
-    text-align: center;
-    font-size: var(--font-size-s);
-    font-weight: 700;
 
-    &--buku {
-      color: var(--color-brand-lilac);
-    }
     &--bean {
       grid-column: 3;
-      color: var(--color-brand-yellow);
     }
   }
 
@@ -202,17 +259,6 @@
     position: relative;
     aspect-ratio: 1408 / 1258;
     overflow: hidden;
-  }
-
-  &__hours {
-    display: block;
-    margin-top: var(--space-xxxs);
-    color: var(--color-brand-off-white);
-    font-size: var(--font-size-xs);
-    font-weight: 400;
-    font-variant-numeric: tabular-nums;
-    line-height: 1.4;
-    overflow-wrap: anywhere;
   }
 
   &__character {
