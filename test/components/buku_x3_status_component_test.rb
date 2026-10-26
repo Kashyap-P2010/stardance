@@ -72,14 +72,32 @@ class BukuX3StatusComponentTest < ViewComponent::TestCase
     Rails.application.config.stub(:stardance_ends_at, 2.days.from_now) do
       render_inline BukuX3StatusComponent.new(user: @user)
     end
-    assert_selector ".buku-x3-status--countdown .buku-x3-status__countdown + .buku-x3-status__damage"
-    assert_selector ".buku-x3-status__clock[data-controller='countdown'][data-countdown-clock-value='true'][aria-hidden='true']"
-    assert_selector ".buku-x3-status__countdown-caption", text: "stardance ends in"
+    assert_selector ".buku-x3-status__countdown + .buku-x3-status__damage"
+    assert_selector ".buku-x3-status__countdown-caption + .buku-x3-status__clock[data-controller='countdown'][data-countdown-clock-value='true'][aria-hidden='true']"
+    assert_selector ".buku-x3-status__countdown-caption", text: /stardance\s*ends in/
+    # No leaderboard passed in, so no toggle.
+    assert_no_selector ".buku-x3-status__leaderboard-toggle"
 
     Rails.application.config.stub(:stardance_ends_at, 1.minute.ago) do
       render_inline BukuX3StatusComponent.new(user: @user)
     end
-    assert_no_selector ".buku-x3-status__countdown, .buku-x3-status--countdown"
+    assert_no_selector ".buku-x3-status__countdown"
+  end
+
+  test "leaderboard toggle sits beside the clock, and keeps its row with the clock off" do
+    Rails.application.config.stub(:stardance_ends_at, 2.days.from_now) do
+      render_inline(BukuX3StatusComponent.new(user: @user)) { "leaderboard" }
+      assert_selector ".buku-x3-status[data-controller='buku-x3-status buku-leaderboard-panel']"
+      assert_selector ".buku-x3-status__clock + button.buku-x3-status__leaderboard-toggle[aria-expanded='false'][aria-controls='buku-leaderboard-panel']" do
+        assert_selector ".buku-x3-status__leaderboard-show", text: /show\s*leaderboard\?/
+        assert_selector ".buku-x3-status__leaderboard-hide", text: /hide\s*leaderboard\?/
+      end
+
+      @user.preference.update!(countdown_enabled: false)
+      render_inline(BukuX3StatusComponent.new(user: @user)) { "leaderboard" }
+      assert_no_selector ".buku-x3-status__clock"
+      assert_selector ".buku-x3-status__countdown > .buku-x3-status__leaderboard-toggle"
+    end
   end
 
   test "countdown respects the viewer's setting and shows for guests" do

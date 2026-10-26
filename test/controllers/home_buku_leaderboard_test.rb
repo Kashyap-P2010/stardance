@@ -7,10 +7,12 @@ class HomeBukuLeaderboardTest < ActionDispatch::IntegrationTest
   test "home tucks the team lists inside the event status box behind a toggle without a separate page link" do
     get home_path
     assert_response :success
-    assert_select "turbo-frame#buku_x3_home_status > .buku-x3-status > .buku-leaderboard[data-controller='buku-leaderboard-panel']", count: 1
-    assert_select ".buku-leaderboard__panel#buku-leaderboard-panel[hidden] .buku-leaderboard__team", count: 2
+    assert_select "turbo-frame#buku_x3_home_status > .buku-x3-status[data-controller~='buku-leaderboard-panel'] > .buku-leaderboard", count: 1
+    # Starts closed: the controller adds data-open to the box, and CSS hides the panel until then.
+    assert_select ".buku-x3-status[data-open]", count: 0
+    assert_select ".buku-leaderboard__drawer > .buku-leaderboard__panel#buku-leaderboard-panel .buku-leaderboard__team", count: 2
     assert_select ".buku-leaderboard__panel > .buku-leaderboard__note:first-child", text: /top five.*limited-edition/
-    assert_select ".buku-leaderboard__panel + button.buku-leaderboard__toggle[aria-expanded='false'][aria-controls='buku-leaderboard-panel']", text: /show leaderboard/
+    assert_select ".buku-x3-status__countdown > button.buku-x3-status__leaderboard-toggle[aria-controls='buku-leaderboard-panel']", count: 1
     assert_select ".buku-leaderboard-promo, a[href='/buku_x3/leaderboard']", count: 0
   end
 

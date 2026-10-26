@@ -27,6 +27,10 @@ class BukuX3StatusComponent < ViewComponent::Base
     Time.current < ends_at && @user&.preference&.countdown_enabled? != false
   end
 
+  # The home page passes the leaderboard as content; its toggle sits in the clock row.
+  # (home always passes a block, which is empty when the viewer can't see the leaderboard).
+  def leaderboard? = !compact? && content.present?
+
   def ends_at = Rails.application.config.stardance_ends_at
   def compact? = @compact
   def preview? = @preview && Rails.env.development?

@@ -1,8 +1,12 @@
 @use "../config/mixins" as *;
 
 // Sits inside the event status box, under the tug row. Hidden until the
-// toggle in the box's bottom-right corner slides it in from the right.
+// toggle in the box's clock row slides it in from the right; the
+// buku-leaderboard-panel controller sets data-open on the box.
 .buku-leaderboard {
+  --leaderboard-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --leaderboard-duration: 380ms;
+
   display: flex;
   flex-direction: column;
   // Clip the panel while it slides in, without making a scroll container.
@@ -10,33 +14,55 @@
   color: var(--color-brand-off-white);
   font-size: var(--font-size-s);
 
+  // Growing the row from 0fr to 1fr animates the box's height to fit the
+  // list, so the box opens and closes smoothly instead of jumping.
+  &__drawer {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows var(--leaderboard-duration)
+      var(--leaderboard-ease);
+  }
+
   &__panel {
     display: flex;
     flex-direction: column;
     gap: var(--space-xxxs);
-    padding-top: var(--space-xs);
-    border-top: 1px solid
-      color-mix(in srgb, var(--color-set-1-fg-secondary) 50%, transparent);
+    min-height: 0;
+    overflow: hidden;
+    padding-top: 0;
+    border-top: 1px solid transparent;
+    // Hidden from screen readers and tabbing once it has slid away.
+    visibility: hidden;
+    transform: translateX(100%);
+    opacity: 0;
     transition:
-      transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
-      opacity 320ms ease;
+      transform var(--leaderboard-duration) var(--leaderboard-ease),
+      opacity var(--leaderboard-duration) var(--leaderboard-ease),
+      padding-top var(--leaderboard-duration) var(--leaderboard-ease),
+      border-color var(--leaderboard-duration) var(--leaderboard-ease),
+      visibility 0s linear var(--leaderboard-duration);
+  }
 
-    @starting-style {
-      transform: translateX(100%);
-      opacity: 0;
-    }
+  [data-open] > & &__drawer {
+    grid-template-rows: 1fr;
+  }
 
-    // buku-leaderboard-panel sets this while sliding out, then `hidden`.
-    &[data-closing] {
-      transform: translateX(100%);
-      opacity: 0;
-    }
+  [data-open] > & &__panel {
+    padding-top: var(--space-xs);
+    border-top-color: color-mix(
+      in srgb,
+      var(--color-set-1-fg-secondary) 50%,
+      transparent
+    );
+    visibility: visible;
+    transform: none;
+    opacity: 1;
+    transition-delay: 0s;
+  }
 
-    &[hidden] {
-      display: none;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
+  @media (prefers-reduced-motion: reduce) {
+    &__drawer,
+    &__panel {
       transition: none;
     }
   }
@@ -46,33 +72,6 @@
     color: var(--color-brand-cream);
     font-size: var(--font-size-xs);
     text-wrap: balance;
-  }
-  &__toggle {
-    align-self: flex-end;
-    margin-top: var(--space-xxxs);
-    padding: var(--space-xxxs) var(--space-xs);
-    border: 0;
-    border-radius: 8px;
-    background: none;
-    color: var(--color-brand-cream);
-    font: inherit;
-    font-size: var(--font-size-xs);
-    cursor: pointer;
-
-    &:hover {
-      color: var(--color-brand-off-white);
-    }
-    &:focus-visible {
-      outline: 2px solid currentColor;
-      outline-offset: 1px;
-    }
-  }
-  &__hide,
-  &__toggle[aria-expanded="true"] &__show {
-    display: none;
-  }
-  &__toggle[aria-expanded="true"] &__hide {
-    display: inline;
   }
 
   &__teams {
