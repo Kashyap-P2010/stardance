@@ -87,6 +87,8 @@
 
   &__countdown-caption {
     grid-column: 1;
+    // Same box as the toggle's padding, so both labels' lines line up.
+    padding-block: var(--space-xxxs);
     justify-self: end;
     text-align: right;
   }
